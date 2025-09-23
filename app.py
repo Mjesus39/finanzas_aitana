@@ -132,6 +132,11 @@ def estado_class(producto):
         return "table-warning"  # amarillo = poco stock
     return ""                   # sin clase extra
 
+def estado_class(producto):
+    if producto.unidades_restantes <= 5:
+        return "table-danger"  # Rojo si quedan 5 o menos
+    return ""
+
 # ---------------------------
 # HELPERS
 # ---------------------------
