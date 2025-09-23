@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Inicio{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Listado de Productos</h2>
+
+<div class="mb-3">
+    <a class="btn btn-primary" href="{{ url_for('nuevo_producto') }}">➕ Nuevo Producto</a>
+    <a class="btn btn-secondary" href="{{ url_for('liquidacion') }}">📊 Ver Liquidación</a>
+</div>
+
+{% if productos %}
+<table id="tabla-productos" class="table table-bordered table-hover align-middle text-center">
+  <thead class="table-dark">
+    <tr>
+      <th>Orden</th>
+      <th>Código</th>
+      <th>Nombre</th>
+      <th>Unidades Iniciales</th>
+      <th>Vender</th>
+      <th>Unidades Vendidas</th>
+      <th>Valor Vendido</th>
+      <!-- <th>Eliminar</th> --> <!-- Eliminado -->
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in productos %}
+    {% set vendidas = (p.stock_inicial or 0) - (p.unidades_restantes or 0) %}
+    {% set valor = vendidas * (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
+    <tr class="{{ estado_class(p) }}">
+      <td style="width:100px;">
+        <form action="{{ url_for('actualizar_orden_producto', producto_id=p.id) }}" method="post" class="d-flex actualizar-orden-form">
+          <input type="number" name="orden" value="{{ p.orden }}" class="form-control text-center" style="width:70px;"/>
+          <button type="submit" class="btn btn-outline-primary ms-1 btn-sm">✔</button>
+        </form>
+      </td>
+      <td>{{ p.codigo }}</td>
+      <td>{{ p.nombre }}</td>
+      <td class="stock-inicial">{{ p.unidades_restantes or 0 }}</td>
+      <td>
+        <form action="{{ url_for('vender', producto_id=p.id) }}" method="post" class="d-flex">
+          <input type="number" step="1" min="1" max="{{ p.unidades_restantes }}" name="cantidad" placeholder="0" class="form-control text-end" required/>
+          <button type="submit" class="btn btn-success ms-1 btn-sm">💵</button>
+        </form>
+      </td>
+      <td>{{ vendidas }}</td>
+      <td class="valor-vendido">{{ "%.2f"|format(valor) }}</td>
+      <!-- Eliminado el botón de eliminar -->
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <th colspan="6" class="text-end">Total Vendido</th>
+      <th>{{ "%.2f"|format(total_vendido) }}</th>
+      <!-- <th></th> --> <!-- Eliminado -->
+    </tr>
+  </tfoot>
+</table>
+{% else %}
+<div class="alert alert-info">No hay productos registrados todavía.</div>
+{% endif %}
+{% endblock %}
+

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Liquidación{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>Liquidación del Día</h2>
+  <p><strong>Fecha:</strong> {{ hoy.strftime("%d/%m/%Y") }}</p>
+
+  <!-- Totales diarios -->
+  {% if liq_hoy %}
+  <div class="mb-3">
+    <strong>Total Ventas hoy:</strong> {{ "%.2f"|format(liq_hoy.total_ventas) }} |
+    <strong>Caja:</strong> {{ "%.2f"|format(liq_hoy.caja) }} |
+    <strong>Inventario:</strong> {{ "%.2f"|format(liq_hoy.inventario) }}
+  </div>
+  {% endif %}
+
+  {% if productos %}
+  <table class="table table-bordered table-hover mt-3 align-middle text-center">
+    <thead class="table-dark">
+      <tr>
+        <th>Orden</th>
+        <th>Código</th>
+        <th>Fecha</th>
+        <th>Producto</th>
+        <th>Unidades Iniciales</th>
+        <th>Unidades Vendidas</th>
+        <th>Valor Total Vendido</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set total_vendido = 0 %}
+      {% for p in productos %}
+      {% set valor_vendido = p.precio_venta * (p.stock_inicial - p.stock) %}
+      {% set total_vendido = total_vendido + valor_vendido %}
+      <tr id="producto-{{ p.id }}" class="{{ estado_class(p) }}">
+        <td>{{ p.orden }}</td>
+        <td>{{ p.codigo }}</td>
+        <td>{{ p.fecha_creacion.strftime("%d/%m/%Y") }}</td>
+        <td>{{ p.nombre }}</td>
+        <td>{{ "%.2f"|format(p.stock_inicial) }}</td>
+        <td>
+          <form action="{{ url_for('salida_inventario', producto_id=p.id) }}" method="post" class="d-flex justify-content-center">
+            <input type="number" step="0.01" min="0" max="{{ p.stock }}" name="cantidad" class="form-control text-end" style="width:80px;" />
+            <button type="submit" class="btn btn-success btn-sm ms-1">✔</button>
+          </form>
+        </td>
+        <td>{{ "%.2f"|format(valor_vendido) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot class="table-light">
+      <tr>
+        <th colspan="6" class="text-end">Total Vendido:</th>
+        <th>{{ "%.2f"|format(total_vendido) }}</th>
+      </tr>
+    </tfoot>
+  </table>
+  {% else %}
+  <div class="alert alert-info">No hay productos registrados hoy.</div>
+  {% endif %}
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', async e => {
+            e.preventDefault();
+            const input = form.querySelector('input[name="cantidad"]');
+            const cantidad = parseFloat(input.value);
+            if (isNaN(cantidad) || cantidad <= 0) {
+                alert("Ingrese una cantidad válida");
+                return;
+            }
+
+            const action = form.action;
+            try {
+                const response = await fetch(action, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: `cantidad=${cantidad}`
+                });
+                const data = await response.json();
+                if (data.success) {
+                    input.value = '';
+                    // Actualiza stock si quieres reflejar unidades restantes
+                    const fila = form.closest('tr');
+                    if (fila) fila.classList.add("table-success");
+                    setTimeout(() => fila.classList.remove("table-success"), 1500);
+                } else {
+                    alert(data.mensaje);
+                }
+            } catch(err) {
+                console.error(err);
+                alert("Error al registrar la venta");
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

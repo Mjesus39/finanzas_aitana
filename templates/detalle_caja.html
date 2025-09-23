@@ -1,0 +1,41 @@
+
+{% extends "base.html" %}
+
+{% block title %}Detalle Caja - {{ fecha }}{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Detalle de Caja - {{ fecha }}</h2>
+
+{% if detalle %}
+<table class="table table-bordered table-hover text-center align-middle">
+    <thead class="table-dark">
+        <tr>
+            <th>Producto</th>
+            <th>Unidades Vendidas</th>
+            <th>Valor Vendido</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% set total = 0 %}
+        {% for item in detalle %}
+        <tr>
+            <td>{{ item.producto }}</td>
+            <td>{{ item.vendidas }}</td>
+            <td>{{ "%.2f"|format(item.valor) }}</td>
+        </tr>
+        {% set total = total + item.valor %}
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr>
+            <th colspan="2" class="text-end">Total Vendido</th>
+            <th>{{ "%.2f"|format(total) }}</th>
+        </tr>
+    </tfoot>
+</table>
+{% else %}
+<div class="alert alert-info">No se registraron ventas en esta fecha.</div>
+{% endif %}
+
+<a href="{{ url_for('liquidacion') }}" class="btn btn-secondary mt-3">← Volver a Liquidación</a>
+{% endblock %}

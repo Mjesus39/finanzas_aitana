@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mb-4">Resumen Total de Caja</h2>
+
+{% if resumen_diario %}
+<table class="table table-bordered table-hover text-center align-middle">
+    <thead class="table-dark">
+        <tr>
+            <th>Fecha</th>
+            <th>Caja</th>
+            <th>Inventario</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for liq in resumen_diario %}
+        <tr>
+            <td>{{ liq['fecha'].strftime("%d/%m/%Y") }}</td>
+            <td>
+                <a href="{{ url_for('detalle_caja', fecha=liq['fecha'].strftime('%Y-%m-%d')) }}">
+                    {{ "%.2f"|format(liq['caja']) }}
+                </a>
+            </td>
+            <td>{{ "%.2f"|format(liq['inventario']) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="alert alert-info">No hay registros.</div>
+{% endif %}
+
+<a href="{{ url_for('liquidacion') }}" class="btn btn-secondary mt-3">← Volver a Liquidación</a>
+{% endblock %}
+
