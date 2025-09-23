@@ -1,4 +1,5 @@
 
+
 {% extends "base.html" %}
 
 {% block title %}Inicio{% endblock %}
@@ -18,18 +19,19 @@
       <th>Orden</th>
       <th>Código</th>
       <th>Nombre</th>
-      <th>Precio con Ganancia</th> <!-- Nueva columna -->
+      <th>Precio con Ganancia</th>
       <th>Unidades Iniciales</th>
       <th>Vender</th>
       <th>Unidades Vendidas</th>
       <th>Valor Vendido</th>
+      <th>Eliminar</th> <!-- Nueva columna -->
     </tr>
   </thead>
   <tbody>
     {% for p in productos %}
     {% set vendidas = (p.stock_inicial or 0) - (p.unidades_restantes or 0) %}
     {% set valor_vendido = vendidas * (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
-    {% set precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %} <!-- Nuevo cálculo -->
+    {% set precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
     <tr class="{{ estado_class(p) }}">
       <td style="width:100px;">
         <form action="{{ url_for('actualizar_orden_producto', producto_id=p.id) }}" method="post" class="d-flex actualizar-orden-form">
@@ -39,7 +41,7 @@
       </td>
       <td>{{ p.codigo }}</td>
       <td>{{ p.nombre }}</td>
-      <td>{{ "%.2f"|format(precio_ganancia) }}</td> <!-- Mostramos precio con ganancia -->
+      <td>{{ "%.2f"|format(precio_ganancia) }}</td>
       <td class="stock-inicial">{{ p.unidades_restantes or 0 }}</td>
       <td>
         <form action="{{ url_for('vender', producto_id=p.id) }}" method="post" class="d-flex">
@@ -49,6 +51,11 @@
       </td>
       <td>{{ vendidas }}</td>
       <td class="valor-vendido">{{ "%.2f"|format(valor_vendido) }}</td>
+      <td>
+        <form action="{{ url_for('eliminar_producto', producto_id=p.id) }}" method="post">
+          <button type="submit" class="btn btn-danger btn-sm">🗑️</button>
+        </form>
+      </td>
     </tr>
     {% endfor %}
   </tbody>
@@ -56,6 +63,7 @@
     <tr>
       <th colspan="7" class="text-end">Total Vendido</th>
       <th>{{ "%.2f"|format(total_vendido) }}</th>
+      <th></th>
     </tr>
   </tfoot>
 </table>

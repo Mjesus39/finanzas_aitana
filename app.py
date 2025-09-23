@@ -137,6 +137,12 @@ def estado_class(producto):
         return "table-danger"  # Rojo si quedan 5 o menos
     return ""
 
+def normalizar_orden():
+    productos = Producto.query.order_by(Producto.id.asc()).all()  # o por cualquier criterio
+    for i, p in enumerate(productos, start=1):
+        p.orden = i
+    db.session.commit()
+
 # ---------------------------
 # HELPERS
 # ---------------------------
@@ -461,13 +467,29 @@ def ingresar_inventario_por_codigo():
 @login_required
 def actualizar_orden_producto(producto_id):
     producto = Producto.query.get_or_404(producto_id)
+    
     try:
         nuevo_orden = int(request.form.get("orden", producto.orden))
+        if nuevo_orden < 1:
+            raise ValueError
     except ValueError:
         flash("Orden inválida", "danger")
         return redirect(url_for("index"))
 
-    producto.orden = nuevo_orden
+    if nuevo_orden == producto.orden:
+        flash(f"Orden de {producto.nombre} no cambió", "info")
+        return redirect(url_for("index"))
+
+    # Obtener todos los productos excepto el que vamos a mover
+    productos = Producto.query.filter(Producto.id != producto.id).order_by(Producto.orden).all()
+
+    # Insertamos el producto en la nueva posición
+    productos.insert(nuevo_orden - 1, producto)
+
+    # Reasignamos el orden secuencial a todos
+    for idx, p in enumerate(productos, start=1):
+        p.orden = idx
+
     db.session.commit()
     flash(f"Orden de {producto.nombre} actualizada a {nuevo_orden}", "success")
     return redirect(url_for("index"))
