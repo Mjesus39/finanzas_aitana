@@ -137,10 +137,32 @@ def estado_class(producto):
         return "table-danger"  # Rojo si quedan 5 o menos
     return ""
 
-def normalizar_orden():
-    productos = Producto.query.order_by(Producto.id.asc()).all()  # o por cualquier criterio
-    for i, p in enumerate(productos, start=1):
-        p.orden = i
+def actualizar_orden_producto_seguro(producto_id, nuevo_orden):
+    producto = Producto.query.get_or_404(producto_id)
+    
+    # Normalizar orden si hay NULL
+    productos = Producto.query.order_by(Producto.orden.asc(), Producto.id.asc()).all()
+    for idx, p in enumerate(productos, start=1):
+        if not p.orden or p.orden != idx:
+            p.orden = idx
+    db.session.commit()
+    
+    # Reobtenemos la lista ya normalizada
+    productos = Producto.query.order_by(Producto.orden.asc()).all()
+    
+    # Quitamos el producto a mover
+    productos.remove(producto)
+    
+    # Ajustamos nuevo_orden si es mayor que la cantidad de productos
+    if nuevo_orden > len(productos) + 1:
+        nuevo_orden = len(productos) + 1
+    
+    productos.insert(nuevo_orden - 1, producto)
+    
+    # Reasignamos el orden secuencial
+    for idx, p in enumerate(productos, start=1):
+        p.orden = idx
+    
     db.session.commit()
 
 # ---------------------------
@@ -222,39 +244,32 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-    productos = Producto.query.all()
+    # Traer productos ordenados por 'orden'
+    productos = Producto.query.order_by(Producto.orden.asc(), Producto.id.asc()).all()
 
-    liq_hoy = Liquidacion.query.filter_by(fecha=date.today()).first()
+    # Normalizar orden si hay NULL o duplicados
+    for idx, p in enumerate(productos, start=1):
+        if not p.orden or p.orden != idx:
+            p.orden = idx
+    db.session.commit()
 
-    ultimas_liqs = (
-        Liquidacion.query.order_by(Liquidacion.fecha.desc())
-        .limit(10)
-        .all()
-    )
-
-    total_inventario = sum(
-        (p.stock_inicial or 0) * (
-            p.valor_unitario + (p.valor_unitario * (p.interes or 0) / 100)
-        )
-        for p in productos
-    )
-
-    # 👉 CALCULO DEL TOTAL VENDIDO
-    total_vendido = 0
+    # Calcular total vendido por producto
     for p in productos:
-        vendidas = (p.stock_inicial or 0) - (p.unidades_restantes or 0)
-        valor_vendido = vendidas * (p.valor_unitario or 0) * (1 + (p.interes or 0)/100)
-        total_vendido += valor_vendido
+        p.vendidas = (p.stock_inicial or 0) - (p.unidades_restantes or 0)
+        p.valor_vendido = p.vendidas * (p.valor_unitario or 0) * (1 + (p.interes or 0)/100)
+        p.precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0)/100)
+
+    total_vendido = sum(p.valor_vendido for p in productos)
+
+    # Último producto vendido para resaltar
+    ultimo_vendido = session.pop('ultimo_vendido', None)
 
     return render_template(
         "index.html",
         productos=productos,
-        hoy=date.today(),
-        liq_hoy=liq_hoy,
-        ultimas_liqs=ultimas_liqs,
-        total_inventario=total_inventario,
-        total_vendido=total_vendido,   # 👈 ahora lo pasamos
-        estado_class=estado_class
+        estado_class=estado_class,
+        total_vendido=total_vendido,
+        ultimo_vendido=ultimo_vendido
     )
 
 @app.route("/detalle_caja/<fecha>")
@@ -351,37 +366,33 @@ def liquidacion():
     # Liquidación de hoy
     # -------------------
     liq_hoy = Liquidacion.query.filter_by(fecha=hoy).first()
-    total_vendido_hoy = 0
-    for p in productos:
-        vendidas = (p.stock_inicial or 0) - (p.unidades_restantes or 0)
-        if vendidas > 0:
-            total_vendido_hoy += vendidas * p.valor_unitario * (1 + (p.interes or 0)/100)
 
     if liq_hoy:
-        liq_hoy.entrada = total_vendido_hoy      # Guardamos el total vendido
-        liq_hoy.caja = total_vendido_hoy         # Lo mismo para mostrar en la tabla
+        # Usamos lo que ya está guardado en la base de datos
+        total_vendido_hoy = liq_hoy.entrada or 0
+        # Actualizamos solo inventario
         liq_hoy.inventario_valor = float(db.session.query(
             func.coalesce(func.sum(Producto.unidades_restantes * Producto.valor_unitario * (1 + Producto.interes/100)),0)
         ).scalar() or 0.0)
     else:
+        total_vendido_hoy = 0
         liq_hoy = Liquidacion(
             fecha=hoy,
-            entrada=total_vendido_hoy,
+            entrada=0,
             salida=0,
-            caja=total_vendido_hoy,  # Guardamos directamente aquí
+            caja=0,
             inventario_valor=float(db.session.query(
                 func.coalesce(func.sum(Producto.unidades_restantes * Producto.valor_unitario * (1 + Producto.interes/100)),0)
             ).scalar() or 0.0)
         )
         db.session.add(liq_hoy)
+
     db.session.commit()
 
     # -------------------
-    # Últimas 10 liquidaciones con valores correctos
+    # Últimas 10 liquidaciones
     # -------------------
     ultimas = Liquidacion.query.order_by(Liquidacion.fecha.desc()).limit(10).all()
-    # No recalculamos dinámicamente; usamos lo que ya está guardado
-    # liq.caja ya tiene el total vendido del día
 
     # -------------------
     # Resumen total (caja + inventario)
@@ -444,8 +455,12 @@ def vender(producto_id):
 @app.route("/ingresar_inventario_por_codigo", methods=["POST"])
 @login_required
 def ingresar_inventario_por_codigo():
-    codigo = request.form.get("codigo").strip()
-    cantidad = float(request.form.get("cantidad") or 0)
+    codigo = request.form.get("codigo", "").strip()
+    try:
+        cantidad = float(request.form.get("cantidad") or 0)
+    except ValueError:
+        flash("Cantidad inválida", "danger")
+        return redirect(url_for("liquidacion"))
 
     if cantidad <= 0:
         flash("Cantidad inválida", "danger")
@@ -456,8 +471,10 @@ def ingresar_inventario_por_codigo():
         flash("Código no encontrado", "danger")
         return redirect(url_for("liquidacion"))
 
-    # ✅ Sumar al inventario actual, no al stock inicial
+    # 🔹 Sumar al inventario actual y al stock inicial
     producto.unidades_restantes += cantidad
+    producto.stock_inicial += cantidad
+
     db.session.commit()
 
     flash(f"Se ingresaron {cantidad} unidades a {producto.nombre}", "success")
@@ -467,7 +484,7 @@ def ingresar_inventario_por_codigo():
 @login_required
 def actualizar_orden_producto(producto_id):
     producto = Producto.query.get_or_404(producto_id)
-    
+
     try:
         nuevo_orden = int(request.form.get("orden", producto.orden))
         if nuevo_orden < 1:
@@ -476,17 +493,24 @@ def actualizar_orden_producto(producto_id):
         flash("Orden inválida", "danger")
         return redirect(url_for("index"))
 
-    if nuevo_orden == producto.orden:
-        flash(f"Orden de {producto.nombre} no cambió", "info")
-        return redirect(url_for("index"))
+    # Normalizar orden de todos los productos
+    productos = Producto.query.order_by(Producto.orden.asc(), Producto.id.asc()).all()
+    for idx, p in enumerate(productos, start=1):
+        p.orden = idx
+    db.session.commit()
 
-    # Obtener todos los productos excepto el que vamos a mover
-    productos = Producto.query.filter(Producto.id != producto.id).order_by(Producto.orden).all()
+    # Reobtenemos lista ya normalizada y quitamos el producto a mover
+    productos = Producto.query.order_by(Producto.orden.asc()).all()
+    productos.remove(producto)
+
+    # Ajustamos nuevo_orden si es mayor que la cantidad de productos
+    if nuevo_orden > len(productos) + 1:
+        nuevo_orden = len(productos) + 1
 
     # Insertamos el producto en la nueva posición
     productos.insert(nuevo_orden - 1, producto)
 
-    # Reasignamos el orden secuencial a todos
+    # Reasignamos orden secuencial
     for idx, p in enumerate(productos, start=1):
         p.orden = idx
 
@@ -498,9 +522,26 @@ def actualizar_orden_producto(producto_id):
 @login_required
 def eliminar_producto(producto_id):
     producto = Producto.query.get_or_404(producto_id)
+
+    # Calculamos el valor “vendido” del stock restante
+    unidades_a_vender = producto.unidades_restantes or 0
+    valor_vendido = unidades_a_vender * producto.valor_unitario * (1 + (producto.interes or 0)/100)
+
+    if valor_vendido > 0:
+        # Sumamos a la liquidación de hoy
+        liq = Liquidacion.query.filter_by(fecha=date.today()).first()
+        if not liq:
+            liq = Liquidacion(fecha=date.today(), entrada=0, salida=0, caja=0, inventario_valor=0)
+            db.session.add(liq)
+        
+        liq.entrada += valor_vendido
+        liq.caja += valor_vendido
+
+    # Eliminamos el producto
     db.session.delete(producto)
     db.session.commit()
-    flash(f"Producto {producto.nombre} eliminado", "success")
+
+    flash(f"Producto {producto.nombre} eliminado y valor agregado a la caja: {valor_vendido:.2f}", "success")
     return redirect(url_for("index"))
 
 @app.route("/detalle_caja_acumulada")
