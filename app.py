@@ -58,6 +58,59 @@ class MovimientoCaja(db.Model):
     descripcion = db.Column(db.String(255), nullable=True)
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
 
+from datetime import date
+from sqlalchemy import desc
+
+def crear_liquidacion():
+    # Calcula valores actuales de caja e inventario
+    entrada_total = sum(m.monto for m in MovimientoCaja.query.filter_by(tipo='entrada').all())
+    salida_total = sum(m.monto for m in MovimientoCaja.query.filter_by(tipo='salida').all())
+    caja_actual = entrada_total - salida_total
+    inventario_valor = calcular_valor_inventario()  # tu función actual para calcular inventario
+
+    # Verifica si ya existe liquidación del día
+    hoy = date.today()
+    liquidacion = Liquidacion.query.filter_by(fecha=hoy).first()
+    if not liquidacion:
+        liquidacion = Liquidacion(
+            fecha=hoy,
+            entrada=entrada_total,
+            salida=salida_total,
+            caja=caja_actual,
+            inventario_valor=inventario_valor
+        )
+        db.session.add(liquidacion)
+        db.session.commit()
+
+        # Mantener solo las últimas 10 liquidaciones
+        todas = Liquidacion.query.order_by(desc(Liquidacion.fecha)).all()
+        if len(todas) > 10:
+            for liq in todas[10:]:
+                db.session.delete(liq)
+            db.session.commit()
+
+def obtener_resumen_total():
+    # Movimientos manuales
+    total_entradas = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto),0))\
+        .filter(MovimientoCaja.tipo=='entrada').scalar() or 0
+    total_salidas = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto),0))\
+        .filter(MovimientoCaja.tipo=='salida').scalar() or 0
+    total_gastos = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto),0))\
+        .filter(MovimientoCaja.tipo=='gasto').scalar() or 0
+
+    # Ventas (todas las liquidaciones)
+    total_ventas = db.session.query(func.coalesce(func.sum(Liquidacion.entrada),0)).scalar() or 0
+
+    # Caja total = ventas + entradas - salidas - gastos
+    caja_total = total_ventas + total_entradas - (total_salidas + total_gastos)
+    
+    # Inventario
+    inventario_total = float(db.session.query(
+        func.coalesce(func.sum(Producto.unidades_restantes * Producto.valor_unitario * (1 + Producto.interes/100)),0)
+    ).scalar() or 0)
+
+    return {"caja_total": caja_total, "inventario_total": inventario_total}
+
 class Liquidacion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     fecha = db.Column(db.Date, unique=True, nullable=False)
@@ -196,7 +249,7 @@ def index():
 @app.route("/detalle_caja/<fecha>")
 @login_required
 def detalle_caja(fecha):
-    from datetime import datetime
+    from datetime import datetime, date
     
     if fecha == "total":
         # Mostrar resumen por día
@@ -215,15 +268,31 @@ def detalle_caja(fecha):
         fecha_dt = datetime.strptime(fecha, "%Y-%m-%d").date()
         productos = Producto.query.all()
         detalle = []
+        total_vendido = 0
+
         for p in productos:
             vendidas = (p.stock_inicial or 0) - (p.unidades_restantes or 0)
             if vendidas > 0:
+                valor_vendido = vendidas * p.valor_unitario * (1 + (p.interes or 0)/100)
                 detalle.append({
                     "producto": p.nombre,
                     "vendidas": vendidas,
-                    "valor": vendidas * p.valor_unitario * (1 + (p.interes or 0)/100)
+                    "valor": valor_vendido
                 })
-        return render_template("detalle_caja.html", fecha=fecha_dt, detalle=detalle)
+                total_vendido += valor_vendido
+
+        # Actualizamos la liquidación de la caja con el total vendido del día
+        liq = Liquidacion.query.filter_by(fecha=fecha_dt).first()
+        if liq:
+            liq.caja = total_vendido
+            db.session.commit()
+
+        return render_template(
+            "detalle_caja.html",
+            fecha=fecha_dt,
+            detalle=detalle,
+            total_vendido=total_vendido
+        )
 
 @app.route("/detalle_caja_total")
 @login_required
@@ -231,7 +300,17 @@ def detalle_caja_total():
     # Traer todas las liquidaciones
     liquidaciones = Liquidacion.query.order_by(Liquidacion.fecha.asc()).all()
     
-    # Calcular total acumulado de caja e inventario
+    # Actualizar caja de cada liquidación según ventas actuales
+    productos = Producto.query.all()
+    for liq in liquidaciones:
+        total_vendido = 0
+        for p in productos:
+            vendidas = (p.stock_inicial or 0) - (p.unidades_restantes or 0)
+            if vendidas > 0:
+                total_vendido += vendidas * p.valor_unitario * (1 + (p.interes or 0)/100)
+        liq.caja = total_vendido
+
+    # Calcular totales acumulados
     total_caja = sum(liq.caja or 0 for liq in liquidaciones)
     total_inventario = sum(liq.inventario_valor or 0 for liq in liquidaciones)
 
@@ -255,56 +334,59 @@ def dashboard():
 @login_required
 def liquidacion():
     hoy = date.today()
-    
-    # Actualizar liquidación de hoy
-    liq_hoy = actualizar_liquidacion_por_movimiento(hoy)
-
-    # Calcular total vendido del día y detalle de ventas
     productos = Producto.query.all()
-    total_vendido = 0
-    ventas_detalle = []
+
+    # -------------------
+    # Liquidación de hoy
+    # -------------------
+    liq_hoy = Liquidacion.query.filter_by(fecha=hoy).first()
+    total_vendido_hoy = 0
     for p in productos:
         vendidas = (p.stock_inicial or 0) - (p.unidades_restantes or 0)
         if vendidas > 0:
-            # Incluir ganancia (interés) en el valor vendido
-            valor_vendido = vendidas * p.valor_unitario * (1 + (p.interes or 0)/100)
-            total_vendido += valor_vendido
-            ventas_detalle.append({
-                "producto": p.nombre,
-                "vendidas": vendidas,
-                "valor": valor_vendido
-            })
+            total_vendido_hoy += vendidas * p.valor_unitario * (1 + (p.interes or 0)/100)
 
-    # Actualizar inventario de hoy incluyendo ganancia en valor unitario
-    liq_hoy.inventario_valor = float(db.session.query(
-        func.coalesce(func.sum(Producto.unidades_restantes * Producto.valor_unitario * (1 + Producto.interes/100)), 0)
-    ).scalar() or 0.0)
-
-    # Actualizar caja del día sumando ventas
-    liq_hoy.caja = (liq_hoy.caja or 0) + total_vendido
+    if liq_hoy:
+        liq_hoy.entrada = total_vendido_hoy      # Guardamos el total vendido
+        liq_hoy.caja = total_vendido_hoy         # Lo mismo para mostrar en la tabla
+        liq_hoy.inventario_valor = float(db.session.query(
+            func.coalesce(func.sum(Producto.unidades_restantes * Producto.valor_unitario * (1 + Producto.interes/100)),0)
+        ).scalar() or 0.0)
+    else:
+        liq_hoy = Liquidacion(
+            fecha=hoy,
+            entrada=total_vendido_hoy,
+            salida=0,
+            caja=total_vendido_hoy,  # Guardamos directamente aquí
+            inventario_valor=float(db.session.query(
+                func.coalesce(func.sum(Producto.unidades_restantes * Producto.valor_unitario * (1 + Producto.interes/100)),0)
+            ).scalar() or 0.0)
+        )
+        db.session.add(liq_hoy)
     db.session.commit()
 
-    # Últimas 10 liquidaciones
+    # -------------------
+    # Últimas 10 liquidaciones con valores correctos
+    # -------------------
     ultimas = Liquidacion.query.order_by(Liquidacion.fecha.desc()).limit(10).all()
+    # No recalculamos dinámicamente; usamos lo que ya está guardado
+    # liq.caja ya tiene el total vendido del día
 
-    # Calcular totales acumulados
-    total_caja = sum(liq.caja or 0 for liq in Liquidacion.query.all())
-    total_inventario = sum(
-        float(db.session.query(
-            func.coalesce(func.sum(Producto.unidades_restantes * Producto.valor_unitario * (1 + Producto.interes/100)), 0)
-        ).scalar() or 0.0)
-        for liq in Liquidacion.query.all()
-    )
+    # -------------------
+    # Resumen total (caja + inventario)
+    # -------------------
+    resumen = obtener_resumen_total()
+    total_caja = resumen["caja_total"]
+    total_inventario = resumen["inventario_total"]
 
     return render_template(
         "liquidacion.html",
         liquidaciones=ultimas,
         hoy=hoy,
         liq_hoy=liq_hoy,
-        total_vendido=total_vendido,
-        ventas_detalle=ventas_detalle,
-        total_caja=total_caja,             # total acumulado
-        total_inventario=liq_hoy.inventario_valor  # inventario total con ganancia
+        total_vendido=total_vendido_hoy,
+        total_caja=total_caja,
+        total_inventario=total_inventario
     )
 
 @app.route("/vender/<int:producto_id>", methods=["POST"])
@@ -435,7 +517,9 @@ def caja_movimiento(tipo):
     db.session.add(mov)
     db.session.commit()
 
-    actualizar_liquidacion_por_movimiento(date.today())
+    # ✅ No llamamos a actualizar_liquidacion_por_movimiento aquí
+    # La caja histórica queda intacta; solo se modifica la caja resumen total al calcularla
+
     flash(f"{tipo.capitalize()} registrada en caja", "success")
     return redirect(url_for("liquidacion"))
 

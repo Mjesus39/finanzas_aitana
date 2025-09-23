@@ -49,6 +49,9 @@
                     {{ "%.2f"|format(total_caja) }}
                 </a>
             </p>
+            <p class="card-text fs-5 text-success">
+                ✅ Total Vendido Hoy: ${{ "%.2f"|format(total_vendido) }}
+            </p>
         </div>
     </div>
 
@@ -64,7 +67,7 @@
         <tbody>
             {% if liquidaciones %}
                 {% for liq in liquidaciones %}
-                <tr>
+                <tr {% if liq.fecha == hoy %}class="table-info"{% endif %}>
                     <td>{{ liq.fecha.strftime("%d/%m/%Y") if liq.fecha else "---" }}</td>
                     <td>
                         <a href="{{ url_for('detalle_caja', fecha=liq.fecha.strftime('%Y-%m-%d')) }}">
@@ -83,4 +86,3 @@
     </table>
 </div>
 {% endblock %}
-

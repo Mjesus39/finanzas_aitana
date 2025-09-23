@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 
 {% block title %}Inicio{% endblock %}
@@ -17,17 +18,18 @@
       <th>Orden</th>
       <th>Código</th>
       <th>Nombre</th>
+      <th>Precio con Ganancia</th> <!-- Nueva columna -->
       <th>Unidades Iniciales</th>
       <th>Vender</th>
       <th>Unidades Vendidas</th>
       <th>Valor Vendido</th>
-      <!-- <th>Eliminar</th> --> <!-- Eliminado -->
     </tr>
   </thead>
   <tbody>
     {% for p in productos %}
     {% set vendidas = (p.stock_inicial or 0) - (p.unidades_restantes or 0) %}
-    {% set valor = vendidas * (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
+    {% set valor_vendido = vendidas * (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
+    {% set precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %} <!-- Nuevo cálculo -->
     <tr class="{{ estado_class(p) }}">
       <td style="width:100px;">
         <form action="{{ url_for('actualizar_orden_producto', producto_id=p.id) }}" method="post" class="d-flex actualizar-orden-form">
@@ -37,6 +39,7 @@
       </td>
       <td>{{ p.codigo }}</td>
       <td>{{ p.nombre }}</td>
+      <td>{{ "%.2f"|format(precio_ganancia) }}</td> <!-- Mostramos precio con ganancia -->
       <td class="stock-inicial">{{ p.unidades_restantes or 0 }}</td>
       <td>
         <form action="{{ url_for('vender', producto_id=p.id) }}" method="post" class="d-flex">
@@ -45,16 +48,14 @@
         </form>
       </td>
       <td>{{ vendidas }}</td>
-      <td class="valor-vendido">{{ "%.2f"|format(valor) }}</td>
-      <!-- Eliminado el botón de eliminar -->
+      <td class="valor-vendido">{{ "%.2f"|format(valor_vendido) }}</td>
     </tr>
     {% endfor %}
   </tbody>
   <tfoot>
     <tr>
-      <th colspan="6" class="text-end">Total Vendido</th>
+      <th colspan="7" class="text-end">Total Vendido</th>
       <th>{{ "%.2f"|format(total_vendido) }}</th>
-      <!-- <th></th> --> <!-- Eliminado -->
     </tr>
   </tfoot>
 </table>
@@ -62,4 +63,3 @@
 <div class="alert alert-info">No hay productos registrados todavía.</div>
 {% endif %}
 {% endblock %}
-
