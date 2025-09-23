@@ -56,7 +56,7 @@
     </div>
 
     <!-- Tabla de liquidaciones diarias -->
-    <table class="table table-bordered table-hover">
+    <table class="table table-bordered table-hover mb-5">
         <thead class="table-dark">
             <tr>
                 <th>Fecha</th>
@@ -82,6 +82,33 @@
                     <td colspan="3" class="text-center">⚠️ No hay registros</td>
                 </tr>
             {% endif %}
+        </tbody>
+    </table>
+
+    <!-- Tabla de productos con colores según stock -->
+    <h4>📦 Productos</h4>
+    <table class="table table-bordered table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>Código</th>
+                <th>Nombre</th>
+                <th>Stock Inicial</th>
+                <th>Unidades Restantes</th>
+                <th>Valor Unitario</th>
+                <th>Ganancia %</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for producto in productos %}
+            <tr class="{{ estado_class(producto) }}">
+                <td>{{ producto.codigo }}</td>
+                <td>{{ producto.nombre }}</td>
+                <td>{{ producto.stock_inicial }}</td>
+                <td>{{ producto.unidades_restantes }}</td>
+                <td>{{ "%.2f"|format(producto.valor_unitario) }}</td>
+                <td>{{ "%.2f"|format(producto.interes) }}</td>
+            </tr>
+            {% endfor %}
         </tbody>
     </table>
 </div>

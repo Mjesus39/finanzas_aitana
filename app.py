@@ -445,8 +445,8 @@ def ingresar_inventario_por_codigo():
         flash("Código no encontrado", "danger")
         return redirect(url_for("liquidacion"))
 
-    # Sumar al stock inicial
-    producto.stock_inicial += cantidad
+    # ✅ Sumar al inventario actual, no al stock inicial
+    producto.unidades_restantes += cantidad
     db.session.commit()
 
     flash(f"Se ingresaron {cantidad} unidades a {producto.nombre}", "success")
