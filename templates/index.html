@@ -1,142 +1,107 @@
-
 {% extends "base.html" %}
-
 {% block title %}Inicio{% endblock %}
 
 {% block content %}
 <h2 class="mb-4">Listado de Productos</h2>
 
-<!-- Botones -->
 <div class="mb-3 d-flex gap-2">
     <a class="btn btn-primary" href="{{ url_for('nuevo_producto') }}">➕ Nuevo Producto</a>
     <a class="btn btn-secondary" href="{{ url_for('liquidacion') }}">📊 Ver Liquidación</a>
+    <input type="text" id="buscar-producto" class="form-control" placeholder="Buscar producto por nombre o código...">
 </div>
 
-<!-- Pestañas -->
-<ul class="nav nav-tabs" id="tabMenu" role="tablist">
-  <li class="nav-item" role="presentation">
-    <button class="nav-link active" id="buscar-tab" data-bs-toggle="tab" data-bs-target="#buscar" type="button" role="tab">🔍 Buscar Productos</button>
-  </li>
-  <li class="nav-item" role="presentation">
-    <button class="nav-link" id="reponer-tab" data-bs-toggle="tab" data-bs-target="#reponer" type="button" role="tab">📦 Reponer Stock</button>
-  </li>
-</ul>
+{% if productos %}
+<table id="tabla-productos" class="table table-bordered table-hover align-middle text-center">
+  <thead class="table-dark">
+    <tr>
+      <th>Orden</th>
+      <th>Código</th>
+      <th>Nombre</th>
+      <th>Precio con Ganancia</th>
+      <th>Unidades Iniciales</th>
+      <th>Vender</th>
+      <th>Unidades Vendidas (día)</th>
+      <th>Valor Vendido (día)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in productos %}
+    {% set precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
+    <tr class="{{ estado_class(p) }} {% if p.id == session.get('resaltado') %}highlight{% endif %}" data-producto-id="{{ p.id }}">
+      <!-- Orden -->
+      <td style="width:100px;">
+        <form action="{{ url_for('actualizar_orden_producto', producto_id=p.id) }}" method="post" class="d-flex actualizar-orden-form">
+          <input type="number" name="orden" value="{{ p.orden }}" class="form-control text-center" style="width:70px;">
+          <button type="submit" class="btn btn-outline-primary ms-1 btn-sm">✔</button>
+        </form>
+      </td>
 
-<div class="tab-content mt-3" id="tabContent">
-  <!-- Pestaña Buscar -->
-  <div class="tab-pane fade show active" id="buscar" role="tabpanel">
-    <input type="text" id="buscar-producto" class="form-control mb-3" placeholder="Buscar producto por nombre o código...">
+      <td>{{ p.codigo }}</td>
+      <td>{{ p.nombre }}</td>
+      <td>{{ "%.2f"|format(precio_ganancia) }}</td>
+      <td>{{ p.unidades_restantes or 0 }}</td>
 
-    {% if productos %}
-    <table id="tabla-productos" class="table table-bordered table-hover align-middle text-center">
-      <thead class="table-dark">
-        <tr>
-          <th>Orden</th>
-          <th>Código</th>
-          <th>Nombre</th>
-          <th>Precio con Ganancia</th>
-          <th>Unidades Iniciales</th>
-          <th>Vender</th>
-          <th>Unidades Vendidas</th>
-          <th>Valor Vendido</th>
-          <th>Eliminar</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in productos %}
-        {% set vendidas = (p.stock_inicial or 0) - (p.unidades_restantes or 0) %}
-        {% set valor_vendido = vendidas * (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
-        {% set precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
-        <tr class="{{ estado_class(p) }} {% if p.id == session.get('resaltado') %}highlight{% endif %}" data-producto-id="{{ p.id }}">
-          <td style="width:100px;">
-            <form action="{{ url_for('actualizar_orden_producto', producto_id=p.id) }}" method="post" class="d-flex actualizar-orden-form">
-              <input type="number" name="orden" value="{{ p.orden }}" class="form-control text-center" style="width:70px;"/>
-              <button type="submit" class="btn btn-outline-primary ms-1 btn-sm">✔</button>
-            </form>
-          </td>
-          <td>{{ p.codigo }}</td>
-          <td>{{ p.nombre }}</td>
-          <td>{{ "%.2f"|format(precio_ganancia) }}</td>
-          <td class="stock-inicial">{{ p.unidades_restantes or 0 }}</td>
-          <td>
-            <form action="{{ url_for('vender', producto_id=p.id) }}" method="post" class="d-flex">
-              <input type="number" step="1" min="1" max="{{ p.unidades_restantes }}" name="cantidad" placeholder="0" class="form-control text-end cantidad-input" required/>
-              <button type="submit" class="btn btn-success ms-1 btn-sm">💵</button>
-            </form>
-          </td>
-          <td>{{ vendidas }}</td>
-          <td class="valor-vendido">{{ "%.2f"|format(valor_vendido) }}</td>
-          <td>
-            <form action="{{ url_for('eliminar_producto', producto_id=p.id) }}" method="post">
-              <button type="submit" class="btn btn-danger btn-sm">🗑️</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-      <tfoot>
-        <tr>
-          <th colspan="7" class="text-end">Total Vendido</th>
-          <th>{{ "%.2f"|format(total_vendido) }}</th>
-          <th></th>
-        </tr>
-      </tfoot>
-    </table>
-    {% else %}
-    <div class="alert alert-info">No hay productos registrados todavía.</div>
-    {% endif %}
-  </div>
+      <!-- Input de venta -->
+      <td>
+        <form action="{{ url_for('vender', producto_id=p.id) }}" method="post" class="d-flex form-vender">
+          <input type="number" step="1" min="1" max="{{ p.unidades_restantes }}" name="cantidad" placeholder="0" class="form-control text-end cantidad-input" required>
+          <button type="submit" class="btn btn-success ms-1 btn-sm">💵</button>
+        </form>
+      </td>
 
-  <!-- Pestaña Reponer -->
-  <div class="tab-pane fade" id="reponer" role="tabpanel">
-    <div class="card p-3">
-      <h5>Reponer Stock por Código</h5>
-      <form action="{{ url_for('ingresar_inventario_por_codigo') }}" method="post" class="d-flex flex-column gap-2">
-        <input type="text" name="codigo" class="form-control" placeholder="Código del producto" required>
-        <input type="number" name="cantidad" class="form-control" placeholder="Cantidad a ingresar" min="1" required>
-        <button type="submit" class="btn btn-primary">📦 Reponer</button>
-      </form>
-    </div>
-  </div>
-</div>
+      <!-- Nuevas columnas: solo datos diarios -->
+      <td class="vendidas-dia">{{ p.vendidas_dia or 0 }}</td>
+      <td class="valor-vendido-dia">{{ "%.2f"|format(p.valor_vendido_dia or 0) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <th colspan="7" class="text-end">Total Vendido Hoy</th>
+      <th>{{ "%.2f"|format(total_vendido) }}</th>
+    </tr>
+  </tfoot>
+</table>
+{% else %}
+<div class="alert alert-info">No hay productos registrados todavía.</div>
+{% endif %}
 
 <style>
-/* Highlight verde temporal */
+/* 🟢 Fila resaltada cuando se vende un producto */
 .highlight {
-    background-color: #d4edda !important;
-    transition: background-color 0.5s ease;
+  background-color: #d4edda !important;
+  transition: background-color 0.5s ease;
+}
+
+/* Sutil sombreado para filas con poco stock */
+.table-warning td, .table-danger td {
+  transition: background-color 0.3s ease;
 }
 </style>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    const inputBuscar = document.getElementById("buscar-producto");
-    const tabla = document.getElementById("tabla-productos");
-    const filas = tabla ? tabla.getElementsByTagName("tr") : [];
+  const inputBuscar = document.getElementById("buscar-producto");
+  const tabla = document.getElementById("tabla-productos");
+  const filas = tabla ? tabla.getElementsByTagName("tr") : [];
 
-    // Filtrar productos por nombre o código
-    if (inputBuscar) {
-        inputBuscar.addEventListener("keyup", function() {
-            const filtro = inputBuscar.value.toLowerCase();
-            for (let i = 1; i < filas.length; i++) {
-                const cols = filas[i].getElementsByTagName("td");
-                if (cols.length === 0) continue;
-                const codigo = cols[1].textContent.toLowerCase();
-                const nombre = cols[2].textContent.toLowerCase();
-                filas[i].style.display = (codigo.includes(filtro) || nombre.includes(filtro)) ? "" : "none";
-            }
-        });
+  // 🔍 Filtrar productos por nombre o código
+  inputBuscar.addEventListener("keyup", function() {
+    const filtro = inputBuscar.value.toLowerCase();
+    for (let i = 1; i < filas.length; i++) {
+      const cols = filas[i].getElementsByTagName("td");
+      if (cols.length === 0) continue;
+      const codigo = cols[1].textContent.toLowerCase();
+      const nombre = cols[2].textContent.toLowerCase();
+      filas[i].style.display = (codigo.includes(filtro) || nombre.includes(filtro)) ? "" : "none";
     }
+  });
 
-    // Resaltar fila de venta reciente y enfocar input
-    const resaltado = document.querySelector(".highlight");
-    if (resaltado) {
-        const inputCantidad = resaltado.querySelector(".cantidad-input");
-        if (inputCantidad) inputCantidad.focus();
-        setTimeout(() => {
-            resaltado.classList.remove("highlight");
-        }, 5000);
-    }
+  // 🟩 Efecto visual al vender: fila verde por 10 segundos
+  const resaltado = document.querySelector(".highlight");
+  if (resaltado) {
+    setTimeout(() => resaltado.classList.remove("highlight"), 10000);
+  }
 });
 </script>
 

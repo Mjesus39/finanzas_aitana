@@ -1,115 +1,124 @@
 {% extends "base.html" %}
+{% block title %}Liquidación{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
     <h2>📊 Liquidación</h2>
 
-    <!-- Botones de Caja -->
-    <div class="d-flex justify-content-end mb-3">
-        <!-- Entrada -->
-        <form action="{{ url_for('caja_movimiento', tipo='entrada') }}" method="POST" class="me-2 d-flex">
-            <input type="number" name="monto" step="0.01" placeholder="Monto" class="form-control form-control-sm me-1" required>
-            <input type="text" name="descripcion" placeholder="Descripción" class="form-control form-control-sm me-1">
-            <button type="submit" class="btn btn-success btn-sm">💰 Entrada</button>
-        </form>
+    <!-- Selector de fecha -->
+    <form id="form-fecha" method="POST" class="mb-3 d-flex align-items-center gap-2">
+        <label for="fecha" class="fw-bold">📅 Fecha:</label>
+        <input type="date" id="fecha" name="fecha" value="{{ fecha_consulta }}" class="form-control" style="width: 200px;">
+        <button type="submit" class="btn btn-primary">🔍 Consultar</button>
+    </form>
 
-        <!-- Salida -->
-        <form action="{{ url_for('caja_movimiento', tipo='salida') }}" method="POST" class="me-2 d-flex">
-            <input type="number" name="monto" step="0.01" placeholder="Monto" class="form-control form-control-sm me-1" required>
-            <input type="text" name="descripcion" placeholder="Descripción" class="form-control form-control-sm me-1">
-            <button type="submit" class="btn btn-warning btn-sm">💸 Salida</button>
-        </form>
+    <!-- Caja del día -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5>🧾 Liquidación del Día: <span id="fecha-dia">{{ fecha_consulta }}</span></h5>
+            <p><strong>💵 Caja del Día:</strong> $<span id="caja-dia">{{ "%.2f"|format(total_caja) }}</span></p>
+            <p><strong>📦 Inventario Total:</strong> $<span id="inventario-dia">{{ "%.2f"|format(inventario_valor) }}</span></p>
+        </div>
     </div>
 
-    <!-- Ingreso de inventario por código -->
-    <div class="card mb-4">
-        <div class="card-header bg-success text-white">
-            Ingresar Inventario
-        </div>
-        <div class="card-body">
-            <form action="{{ url_for('ingresar_inventario_por_codigo') }}" method="POST" class="d-flex">
-                <input type="text" name="codigo" placeholder="Código del producto" class="form-control me-2" required>
-                <input type="number" name="cantidad" placeholder="Cantidad" step="0.01" min="0.01" class="form-control me-2" required>
-                <button type="submit" class="btn btn-primary">➕ Ingresar</button>
+    <!-- Formularios de caja -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <form action="{{ url_for('caja_entrada') }}" method="POST" class="d-flex gap-2">
+                <input type="number" name="monto" step="0.01" placeholder="Monto" class="form-control" required>
+                <input type="text" name="descripcion" placeholder="Descripción (opcional)" class="form-control">
+                <button type="submit" class="btn btn-success">💰 Entrada</button>
             </form>
-            <small class="text-muted">El inventario se actualizará en la lista de productos automáticamente.</small>
+        </div>
+        <div class="col-md-6">
+            <form action="{{ url_for('caja_salida') }}" method="POST" class="d-flex gap-2">
+                <input type="number" name="monto" step="0.01" placeholder="Monto" class="form-control" required>
+                <input type="text" name="descripcion" placeholder="Descripción (opcional)" class="form-control">
+                <button type="submit" class="btn btn-danger">💸 Salida</button>
+            </form>
         </div>
     </div>
 
-    <!-- Resumen Total -->
+    <!-- Ingresar inventario -->
     <div class="card mb-4">
-        <div class="card-header bg-primary text-white">
-            Resumen Total
-        </div>
         <div class="card-body">
-            <p class="card-text fs-5">📦 Inventario Total: ${{ "%.2f"|format(total_inventario) }}</p>
-            <p class="card-text fs-5">
-                💵 Caja Total: 
-                <a href="{{ url_for('detalle_caja', fecha='total') }}">
-                    {{ "%.2f"|format(total_caja) }}
-                </a>
-            </p>
-            <p class="card-text fs-5 text-success">
-                ✅ Total Vendido Hoy: ${{ "%.2f"|format(total_vendido) }}
-            </p>
+            <h5>📦 Ingresar Inventario</h5>
+            <form action="{{ url_for('ingresar_inventario_por_codigo') }}" method="POST" class="d-flex gap-2">
+                <input type="text" name="codigo" placeholder="Código del producto" class="form-control" required>
+                <input type="number" name="cantidad" step="1" placeholder="Cantidad" class="form-control" required>
+                <button type="submit" class="btn btn-warning">📥 Ingresar</button>
+            </form>
+            <small class="text-muted">El inventario se actualizará automáticamente.</small>
         </div>
     </div>
 
-    <!-- Tabla de liquidaciones diarias -->
-    <table class="table table-bordered table-hover mb-5">
-        <thead class="table-dark">
-            <tr>
-                <th>Fecha</th>
-                <th>Caja</th>
-                <th>Inventario</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if liquidaciones %}
-                {% for liq in liquidaciones %}
-                <tr {% if liq.fecha == hoy %}class="table-info"{% endif %}>
-                    <td>{{ liq.fecha.strftime("%d/%m/%Y") if liq.fecha else "---" }}</td>
-                    <td>
-                        <a href="{{ url_for('detalle_caja', fecha=liq.fecha.strftime('%Y-%m-%d')) }}">
-                            {{ "%.2f"|format(liq.caja|default(0)) }}
-                        </a>
-                    </td>
-                    <td>{{ "%.2f"|format(liq.inventario_valor|default(0)) }}</td>
+    <!-- Tabla de ventas -->
+    <h5 class="mt-4">🛒 Ventas del Día</h5>
+    <div id="tabla-ventas">
+        {% if ventas_dia %}
+        <table class="table table-bordered table-striped text-center align-middle mt-2">
+            <thead class="table-dark">
+                <tr>
+                    <th>Hora</th>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Ingreso</th>
+                </tr>
+            </thead>
+            <tbody id="ventas-body">
+                {% for v in ventas_dia %}
+                <tr>
+                    <td>{{ v.fecha.strftime("%H:%M") }}</td>
+                    <td>{{ v.producto.nombre }}</td>
+                    <td>{{ v.cantidad }}</td>
+                    <td>${{ "%.2f"|format(v.ingreso) }}</td>
                 </tr>
                 {% endfor %}
-            {% else %}
-                <tr>
-                    <td colspan="3" class="text-center">⚠️ No hay registros</td>
-                </tr>
-            {% endif %}
-        </tbody>
-    </table>
-
-    <!-- Tabla de productos con colores según stock -->
-    <h4>📦 Productos</h4>
-    <table class="table table-bordered table-hover">
-        <thead class="table-dark">
-            <tr>
-                <th>Código</th>
-                <th>Nombre</th>
-                <th>Stock Inicial</th>
-                <th>Unidades Restantes</th>
-                <th>Valor Unitario</th>
-                <th>Ganancia %</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for producto in productos %}
-            <tr class="{{ estado_class(producto) }}">
-                <td>{{ producto.codigo }}</td>
-                <td>{{ producto.nombre }}</td>
-                <td>{{ producto.stock_inicial }}</td>
-                <td>{{ producto.unidades_restantes }}</td>
-                <td>{{ "%.2f"|format(producto.valor_unitario) }}</td>
-                <td>{{ "%.2f"|format(producto.interes) }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+            </tbody>
+        </table>
+        {% else %}
+        <div class="alert alert-info">No hay ventas registradas para esta fecha.</div>
+        {% endif %}
+    </div>
 </div>
+
+<!-- 🔄 Autoactualización en vivo -->
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const formFecha = document.getElementById("form-fecha");
+    const fechaInput = document.getElementById("fecha");
+    const cajaDia = document.getElementById("caja-dia");
+    const inventarioDia = document.getElementById("inventario-dia");
+    const ventasBody = document.getElementById("ventas-body");
+    const fechaDia = document.getElementById("fecha-dia");
+
+    async function actualizarLiquidacion() {
+        const fecha = fechaInput.value;
+        const response = await fetch("/liquidacion", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: `fecha=${fecha}`
+        });
+
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+
+        // Extraer los valores nuevos del HTML renderizado
+        cajaDia.textContent = doc.querySelector("#caja-dia").textContent;
+        inventarioDia.textContent = doc.querySelector("#inventario-dia").textContent;
+        ventasBody.innerHTML = doc.querySelector("#ventas-body").innerHTML;
+        fechaDia.textContent = fecha;
+    }
+
+    // Actualiza cada 10 segundos
+    setInterval(actualizarLiquidacion, 10000);
+
+    // Si el usuario cambia la fecha, se detiene el auto-update
+    formFecha.addEventListener("submit", function() {
+        clearInterval();
+    });
+});
+</script>
 {% endblock %}
+
