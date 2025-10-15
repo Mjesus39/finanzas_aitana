@@ -108,6 +108,11 @@ def estado_class(producto):
         return "table-danger"
     return ""
 
+def day_range(fecha: date):
+    start = datetime.combine(fecha, time.min)
+    end = start + timedelta(days=1)
+    return start, end
+
 # ---------------------------
 # LOGIN
 # ---------------------------
@@ -130,51 +135,47 @@ def logout():
     return redirect(url_for("login"))
 
 # ---------------------------
-# PRINCIPAL (versión sincronizada con ventas diarias)
+# PRINCIPAL
 # ---------------------------
 @app.route("/")
 @login_required
 def index():
-    hoy = date.today()
-    start = datetime.combine(hoy, time.min)
-    end = datetime.combine(hoy + timedelta(days=1), time.min)
+    hoy = date.today().isoformat()
+    ultima_actualizacion = session.get("ultima_actualizacion")
 
-    # Traer productos ordenados
+    # 🔄 Reinicio diario de valores vendidos
+    if ultima_actualizacion != hoy:
+        for p in Producto.query.all():
+            p.vendidas_dia = 0
+            p.valor_vendido_dia = 0.0
+            p.fecha = date.today()
+        db.session.commit()
+        session["ultima_actualizacion"] = hoy
+
+    # 📦 Productos ordenados
     productos = Producto.query.order_by(Producto.orden.asc(), Producto.id.asc()).all()
 
-    # Recalcular ventas del día directamente desde la tabla Venta
-    for p in productos:
-        total_vendido = db.session.query(func.coalesce(func.sum(Venta.cantidad), 0)).filter(
-            Venta.producto_id == p.id,
-            Venta.fecha >= start,
-            Venta.fecha < end
-        ).scalar() or 0
-
-        ingreso_vendido = db.session.query(func.coalesce(func.sum(Venta.ingreso), 0)).filter(
-            Venta.producto_id == p.id,
-            Venta.fecha >= start,
-            Venta.fecha < end
-        ).scalar() or 0.0
-
-        p.vendidas_dia = total_vendido
-        p.valor_vendido_dia = ingreso_vendido
-        p.fecha = hoy
-
+    # Normalizar orden
+    for idx, p in enumerate(productos, start=1):
+        if not p.orden or p.orden != idx:
+            p.orden = idx
     db.session.commit()
 
-    # Calcular el precio con ganancia
+    # Calcular precios con ganancia
     for p in productos:
         p.precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0) / 100)
 
     total_vendido = sum(p.valor_vendido_dia or 0 for p in productos)
-    ultimo_vendido = session.pop("resaltado", None)
+
+    # ✅ Mantener resaltado sin reiniciar
+    ultimo_vendido = session.get("resaltado")
 
     return render_template(
         "index.html",
         productos=productos,
         estado_class=estado_class,
         total_vendido=total_vendido,
-        ultimo_vendido=ultimo_vendido
+        resaltado=ultimo_vendido
     )
 
 # ---------------------------
@@ -304,6 +305,36 @@ def vender(producto_id):
 
     return redirect(url_for("index"))
 
+# ---------------------------
+# ELIMINAR VENTA (ajusta caja y producto)
+# ---------------------------
+@app.route("/eliminar_venta/<int:venta_id>", methods=["POST"])
+@login_required
+def eliminar_venta(venta_id):
+    venta = Venta.query.get_or_404(venta_id)
+    producto = Producto.query.get(venta.producto_id)
+
+    # Revertir unidades vendidas
+    producto.unidades_restantes += venta.cantidad
+    producto.vendidas_dia = max((producto.vendidas_dia or 0) - venta.cantidad, 0)
+    producto.valor_vendido_dia = max((producto.valor_vendido_dia or 0) - venta.ingreso, 0)
+
+    # Revertir en caja
+    mov = MovimientoCaja(
+        tipo="salida",
+        monto=venta.ingreso,
+        descripcion=f"Anulación de venta: {producto.nombre}",
+        fecha=datetime.utcnow()
+    )
+    db.session.add(mov)
+
+    # Eliminar la venta
+    db.session.delete(venta)
+    db.session.commit()
+
+    flash(f"Venta eliminada: {producto.nombre} ({venta.cantidad} unidades, -${venta.ingreso:,.2f}).", "warning")
+    return redirect(url_for("liquidacion"))
+
 
 # ---------------------------
 # CAJA
@@ -360,16 +391,16 @@ def liquidacion():
 
     start, end = day_range(fecha_consulta)
 
-    ventas_dia = db.session.query(func.coalesce(func.sum(Venta.ingreso), 0))\
+    ventas_dia = db.session.query(func.coalesce(func.sum(Venta.ingreso), 0)) \
         .filter(Venta.fecha >= start, Venta.fecha < end).scalar() or 0.0
 
-    entradas_dia = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))\
+    entradas_dia = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
         .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end, MovimientoCaja.tipo == "entrada").scalar() or 0.0
 
-    salidas_dia = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))\
+    salidas_dia = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
         .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end, MovimientoCaja.tipo == "salida").scalar() or 0.0
 
-    gastos_dia = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))\
+    gastos_dia = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
         .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end, MovimientoCaja.tipo == "gasto").scalar() or 0.0
 
     caja_dia = float(ventas_dia) + float(entradas_dia) - float(salidas_dia) - float(gastos_dia)
@@ -393,19 +424,20 @@ def liquidacion():
         liq.salida = float(salidas_dia) + float(gastos_dia)
         liq.caja = caja_dia
         liq.inventario_valor = inventario_valor
+
     db.session.commit()
 
     ventas_detalle = Venta.query.filter(Venta.fecha >= start, Venta.fecha < end).order_by(Venta.fecha).all()
+
     return render_template(
-    "liquidacion.html",
-    hoy=date.today(),
-    fecha_consulta=fecha_consulta,
-    liq=liq,
-    ventas_dia=ventas_detalle,
-    inventario_valor=inventario_valor,
-    total_inventario=inventario_valor,
-    total_caja=liq.caja  # 👈 agregado
-)
+        "liquidacion.html",
+        fecha_consulta=fecha_consulta,
+        liq=liq,
+        ventas_dia=ventas_detalle,
+        total_caja=liq.caja,
+        inventario_valor=inventario_valor,
+        caja_total_global=sum(l.caja or 0 for l in Liquidacion.query.all())  # 💰 Total acumulado
+    )
 
 # ---------------------------
 # PRODUCTOS
@@ -435,6 +467,109 @@ def nuevo_producto():
 def eliminar_producto(producto_id):
     flash("Eliminar producto está deshabilitado.", "warning")
     return redirect(url_for("index"))
+
+# ---------------------------
+# CAJA TOTAL Y DETALLES
+# ---------------------------
+
+@app.route("/caja_total")
+@login_required
+def caja_total():
+    """Resumen total acumulado de la caja por día"""
+    registros = Liquidacion.query.order_by(Liquidacion.fecha.desc()).all()
+    total_global = sum(r.caja or 0 for r in registros)
+    return render_template("caja_total.html", registros=registros, total_global=total_global)
+
+
+@app.route("/detalle_caja/<fecha>")
+@login_required
+def detalle_dia(fecha):
+    """Desglose de ventas por producto en un día específico"""
+    try:
+        fecha_dt = datetime.strptime(fecha, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Fecha inválida.", "danger")
+        return redirect(url_for("caja_total"))
+
+    start, end = day_range(fecha_dt)
+
+    # Agrupar ventas por producto
+    resultados = (
+        db.session.query(
+            Producto.nombre.label("producto"),
+            db.func.sum(Venta.cantidad).label("vendidas"),
+            db.func.sum(Venta.ingreso).label("valor")
+        )
+        .join(Producto, Producto.id == Venta.producto_id)
+        .filter(Venta.fecha >= start, Venta.fecha < end)
+        .group_by(Producto.nombre)
+        .order_by(db.func.sum(Venta.ingreso).desc())
+        .all()
+    )
+
+    detalle = [
+        {"producto": r.producto, "vendidas": int(r.vendidas or 0), "valor": float(r.valor or 0)}
+        for r in resultados
+    ]
+
+    return render_template("detalle_dia.html", fecha=fecha_dt, detalle=detalle)
+
+@app.route("/liquidar_total", methods=["POST"])
+@login_required
+def liquidar_total():
+    """Registra una salida total igual al total acumulado y vacía la caja"""
+    registros = Liquidacion.query.all()
+    total_global = sum(r.caja or 0 for r in registros)
+
+    if total_global > 0:
+        mov = MovimientoCaja(
+            tipo="salida",
+            monto=total_global,
+            descripcion="Liquidación total semanal",
+            fecha=datetime.utcnow()
+        )
+        db.session.add(mov)
+
+        # Reiniciar las cajas diarias
+        for r in registros:
+            r.caja = 0.0
+        db.session.commit()
+        flash(f"Se realizó la liquidación total por ${total_global:,.2f}.", "success")
+    else:
+        flash("No hay saldo acumulado para liquidar.", "info")
+
+    return redirect(url_for("liquidacion"))
+
+# ---------------------------
+# LIQUIDAR CAJA TOTAL
+# ---------------------------
+@app.route("/liquidar_caja_total", methods=["POST"])
+@login_required
+def liquidar_caja_total():
+    """Cierra todas las cajas anteriores y deja solo la de hoy en 0"""
+    total_global = sum(l.caja or 0 for l in Liquidacion.query.all())
+
+    if total_global <= 0:
+        flash("No hay caja acumulada para liquidar.", "warning")
+        return redirect(url_for("caja_total"))
+
+    # Registrar salida en caja
+    mov = MovimientoCaja(
+        tipo="salida",
+        monto=total_global,
+        descripcion=f"Liquidación total de caja por ${total_global:,.2f}",
+        fecha=datetime.utcnow()
+    )
+    db.session.add(mov)
+
+    # Dejar todas las cajas anteriores en 0
+    for l in Liquidacion.query.all():
+        l.caja = 0.0
+    db.session.commit()
+
+    flash(f"💰 Caja total de ${total_global:,.2f} liquidada correctamente.", "success")
+    return redirect(url_for("caja_total"))
+
 
 # ---------------------------
 # ERRORES

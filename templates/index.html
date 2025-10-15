@@ -4,10 +4,12 @@
 {% block content %}
 <h2 class="mb-4">Listado de Productos</h2>
 
-<div class="mb-3 d-flex gap-2">
-    <a class="btn btn-primary" href="{{ url_for('nuevo_producto') }}">➕ Nuevo Producto</a>
-    <a class="btn btn-secondary" href="{{ url_for('liquidacion') }}">📊 Ver Liquidación</a>
-    <input type="text" id="buscar-producto" class="form-control" placeholder="Buscar producto por nombre o código...">
+<div class="mb-3 d-flex flex-column flex-md-row gap-2">
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-primary" href="{{ url_for('nuevo_producto') }}">➕ Nuevo Producto</a>
+        <a class="btn btn-secondary" href="{{ url_for('liquidacion') }}">📊 Ver Liquidación</a>
+    </div>
+    <input type="text" id="buscar-producto" class="form-control mt-2 mt-md-0" placeholder="Buscar producto por nombre o código...">
 </div>
 
 {% if productos %}
@@ -27,7 +29,7 @@
   <tbody>
     {% for p in productos %}
     {% set precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
-    <tr class="{{ estado_class(p) }} {% if p.id == session.get('resaltado') %}highlight{% endif %}" data-producto-id="{{ p.id }}">
+    <tr class="{{ estado_class(p) }} {% if p.id == resaltado %}highlight{% endif %}" data-producto-id="{{ p.id }}">
       <!-- Orden -->
       <td style="width:100px;">
         <form action="{{ url_for('actualizar_orden_producto', producto_id=p.id) }}" method="post" class="d-flex actualizar-orden-form">
@@ -41,17 +43,18 @@
       <td>{{ "%.2f"|format(precio_ganancia) }}</td>
       <td>{{ p.unidades_restantes or 0 }}</td>
 
-      <!-- Input de venta -->
+      <!-- Input de venta (agrandado y táctil) -->
       <td>
-        <form action="{{ url_for('vender', producto_id=p.id) }}" method="post" class="d-flex form-vender">
-          <input type="number" step="1" min="1" max="{{ p.unidades_restantes }}" name="cantidad" placeholder="0" class="form-control text-end cantidad-input" required>
-          <button type="submit" class="btn btn-success ms-1 btn-sm">💵</button>
+        <form action="{{ url_for('vender', producto_id=p.id) }}" method="post" class="d-flex form-vender justify-content-center">
+          <input type="number" step="1" min="1" max="{{ p.unidades_restantes }}" name="cantidad"
+                 placeholder="0" class="form-control text-end cantidad-input fs-5 fw-bold" 
+                 style="width:120px; height:50px; font-size:1.4rem;" required>
+          <button type="submit" class="btn btn-success ms-2" style="font-size:1.4rem; padding:0 15px;">💵</button>
         </form>
       </td>
 
-      <!-- Nuevas columnas: solo datos diarios -->
-      <td class="vendidas-dia">{{ p.vendidas_dia or 0 }}</td>
-      <td class="valor-vendido-dia">{{ "%.2f"|format(p.valor_vendido_dia or 0) }}</td>
+      <td class="vendidas-dia fs-6">{{ p.vendidas_dia or 0 }}</td>
+      <td class="valor-vendido-dia fs-6">{{ "%.2f"|format(p.valor_vendido_dia or 0) }}</td>
     </tr>
     {% endfor %}
   </tbody>
@@ -67,15 +70,43 @@
 {% endif %}
 
 <style>
-/* 🟢 Fila resaltada cuando se vende un producto */
+/* 🟢 Fila resaltada al vender */
 .highlight {
   background-color: #d4edda !important;
-  transition: background-color 0.5s ease;
+  animation: fadeOut 2s ease 8s forwards;
 }
 
-/* Sutil sombreado para filas con poco stock */
-.table-warning td, .table-danger td {
-  transition: background-color 0.3s ease;
+/* 🎞️ Efecto de desvanecimiento */
+@keyframes fadeOut {
+  to {
+    background-color: transparent;
+  }
+}
+
+/* ⚠️ Bajo stock */
+.table-danger td {
+  background-color: #f8d7da !important;
+}
+.table-warning td {
+  background-color: #fff3cd !important;
+}
+
+/* 🔍 Buscador */
+#buscar-producto {
+  max-width: 400px;
+}
+
+/* 📱 Ajustes para móviles */
+@media (max-width: 768px) {
+  .cantidad-input {
+    width: 160px !important;
+    height: 60px !important;
+    font-size: 1.8rem !important;
+  }
+  .btn-success {
+    font-size: 1.8rem !important;
+    padding: 5px 20px !important;
+  }
 }
 </style>
 
@@ -96,12 +127,6 @@ document.addEventListener("DOMContentLoaded", function() {
       filas[i].style.display = (codigo.includes(filtro) || nombre.includes(filtro)) ? "" : "none";
     }
   });
-
-  // 🟩 Efecto visual al vender: fila verde por 10 segundos
-  const resaltado = document.querySelector(".highlight");
-  if (resaltado) {
-    setTimeout(() => resaltado.classList.remove("highlight"), 10000);
-  }
 });
 </script>
 

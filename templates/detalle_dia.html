@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Detalle Caja - {{ fecha.strftime("%d/%m/%Y") }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-3 text-center">📅 Detalle de Caja - {{ fecha.strftime("%d/%m/%Y") }}</h2>
+
+    {% if detalle %}
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover text-center align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>🛒 Producto</th>
+                    <th>📦 Unidades Vendidas</th>
+                    <th>💵 Valor Vendido</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set total = 0 %}
+                {% for item in detalle %}
+                <tr>
+                    <td>{{ item.producto }}</td>
+                    <td>{{ item.vendidas }}</td>
+                    <td>${{ "%.2f"|format(item.valor) }}</td>
+                </tr>
+                {% set total = total + item.valor %}
+                {% endfor %}
+            </tbody>
+            <tfoot class="table-light">
+                <tr>
+                    <th colspan="2" class="text-end">🔹 Total Vendido</th>
+                    <th>${{ "%.2f"|format(total) }}</th>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info text-center">No se registraron ventas en esta fecha.</div>
+    {% endif %}
+
+    <div class="mt-4 d-flex justify-content-between">
+        <a href="{{ url_for('caja_total') }}" class="btn btn-secondary">← Volver al Resumen</a>
+        <a href="{{ url_for('liquidacion') }}" class="btn btn-outline-primary">📊 Volver a Liquidación</a>
+    </div>
+</div>
+
+<style>
+.table th, .table td {
+    vertical-align: middle !important;
+}
+.alert {
+    border-radius: 10px;
+}
+@media (max-width: 768px) {
+    h2 {
+        font-size: 1.4rem;
+    }
+    .table {
+        font-size: 0.9rem;
+    }
+}
+</style>
+{% endblock %}
+

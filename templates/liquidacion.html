@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 {% block title %}Liquidación{% endblock %}
 
@@ -11,6 +12,17 @@
         <input type="date" id="fecha" name="fecha" value="{{ fecha_consulta }}" class="form-control" style="width: 200px;">
         <button type="submit" class="btn btn-primary">🔍 Consultar</button>
     </form>
+
+    <!-- 💰 Caja total acumulada -->
+    <div class="card border-success mb-3">
+        <div class="card-body">
+            <h5>💰 <a href="{{ url_for('caja_total') }}" class="text-success text-decoration-none">
+                Caja Total Acumulada
+            </a>:</h5>
+            <h4 class="fw-bold text-success">$ {{ "%.2f"|format(caja_total_global) }}</h4>
+            <small class="text-muted">Haz clic para ver el desglose diario.</small>
+        </div>
+    </div>
 
     <!-- Caja del día -->
     <div class="card mb-3">
@@ -63,6 +75,7 @@
                     <th>Producto</th>
                     <th>Cantidad</th>
                     <th>Ingreso</th>
+                    <th>Eliminar</th>
                 </tr>
             </thead>
             <tbody id="ventas-body">
@@ -72,6 +85,11 @@
                     <td>{{ v.producto.nombre }}</td>
                     <td>{{ v.cantidad }}</td>
                     <td>${{ "%.2f"|format(v.ingreso) }}</td>
+                    <td>
+                        <form action="{{ url_for('eliminar_venta', venta_id=v.id) }}" method="post" style="display:inline;">
+                            <button type="submit" class="btn btn-danger btn-sm">🗑️</button>
+                        </form>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -82,7 +100,7 @@
     </div>
 </div>
 
-<!-- 🔄 Autoactualización en vivo -->
+<!-- 🔄 Autoactualización -->
 <script>
 document.addEventListener("DOMContentLoaded", function() {
     const formFecha = document.getElementById("form-fecha");
@@ -104,21 +122,14 @@ document.addEventListener("DOMContentLoaded", function() {
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, "text/html");
 
-        // Extraer los valores nuevos del HTML renderizado
         cajaDia.textContent = doc.querySelector("#caja-dia").textContent;
         inventarioDia.textContent = doc.querySelector("#inventario-dia").textContent;
         ventasBody.innerHTML = doc.querySelector("#ventas-body").innerHTML;
         fechaDia.textContent = fecha;
     }
 
-    // Actualiza cada 10 segundos
     setInterval(actualizarLiquidacion, 10000);
-
-    // Si el usuario cambia la fecha, se detiene el auto-update
-    formFecha.addEventListener("submit", function() {
-        clearInterval();
-    });
+    formFecha.addEventListener("submit", () => clearInterval());
 });
 </script>
 {% endblock %}
-

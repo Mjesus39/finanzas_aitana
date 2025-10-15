@@ -1,0 +1,90 @@
+
+{% extends "base.html" %}
+{% block title %}Caja Total{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-3 text-center">💰 Resumen Total de Caja</h2>
+
+    <div class="alert alert-success text-center fs-5">
+        <strong>Total Acumulado:</strong> ${{ "%.2f"|format(total_global) }}
+    </div>
+
+    {% if registros %}
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover text-center align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>📅 Fecha</th>
+                    <th>💵 Caja del Día</th>
+                    <th>🏷️ Inventario</th>
+                    <th>🔍 Detalle</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in registros %}
+                <tr>
+                    <td>{{ r.fecha.strftime("%d/%m/%Y") }}</td>
+                    <td>${{ "%.2f"|format(r.caja or 0) }}</td>
+                    <td>${{ "%.2f"|format(r.inventario_valor or 0) }}</td>
+                    <td>
+                        <a href="{{ url_for('detalle_dia', fecha=r.fecha.strftime('%Y-%m-%d')) }}" 
+                           class="btn btn-sm btn-outline-primary">
+                           📋 Ver
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info text-center">No hay registros de caja disponibles.</div>
+    {% endif %}
+
+    <!-- 🔴 Botón de liquidar caja total -->
+    <div class="mt-4 d-flex justify-content-between">
+        <a href="{{ url_for('liquidacion') }}" class="btn btn-secondary">← Volver a Liquidación</a>
+
+        <form action="{{ url_for('liquidar_caja_total') }}" method="POST"
+              onsubmit="return confirm('¿Seguro que deseas liquidar toda la caja acumulada? Esta acción registrará una salida con el monto total y pondrá todas las cajas en 0.');">
+            <button type="submit" class="btn btn-danger fw-bold shadow-sm px-4">
+                💸 Liquidar Caja Total
+            </button>
+        </form>
+    </div>
+</div>
+
+<style>
+/* 🎨 Estilos para hacerlo visualmente limpio y amigable */
+.table th, .table td {
+    vertical-align: middle !important;
+}
+
+.alert {
+    border-radius: 10px;
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #dc3545, #a71d2a);
+    border: none;
+    transition: 0.3s ease;
+}
+.btn-danger:hover {
+    background: linear-gradient(135deg, #a71d2a, #dc3545);
+    transform: scale(1.05);
+}
+
+@media (max-width: 768px) {
+    h2 {
+        font-size: 1.3rem;
+    }
+    .table {
+        font-size: 0.9rem;
+    }
+    .btn-danger {
+        width: 100%;
+    }
+}
+</style>
+{% endblock %}
