@@ -41,9 +41,9 @@
       <td>{{ p.codigo }}</td>
       <td>{{ p.nombre }}</td>
       <td>{{ "%.2f"|format(precio_ganancia) }}</td>
-      <td>{{ p.unidades_restantes or 0 }}</td>
+      <td class="stock-actual">{{ p.unidades_restantes or 0 }}</td>
 
-      <!-- Input de venta (agrandado y táctil) -->
+      <!-- Input de venta -->
       <td>
         <form action="{{ url_for('vender', producto_id=p.id) }}" method="post" class="d-flex form-vender justify-content-center">
           <input type="number" step="1" min="1" max="{{ p.unidades_restantes }}" name="cantidad"
@@ -61,7 +61,7 @@
   <tfoot>
     <tr>
       <th colspan="7" class="text-end">Total Vendido Hoy</th>
-      <th>{{ "%.2f"|format(total_vendido) }}</th>
+      <th id="total-vendido-hoy">{{ "%.2f"|format(total_vendido) }}</th>
     </tr>
   </tfoot>
 </table>
@@ -73,28 +73,20 @@
 /* 🟢 Fila resaltada al vender */
 .highlight {
   background-color: #d4edda !important;
-  animation: fadeOut 2s ease 8s forwards;
+  animation: fadeOut 2s ease 3s forwards;
 }
 
 /* 🎞️ Efecto de desvanecimiento */
 @keyframes fadeOut {
-  to {
-    background-color: transparent;
-  }
+  to { background-color: transparent; }
 }
 
 /* ⚠️ Bajo stock */
-.table-danger td {
-  background-color: #f8d7da !important;
-}
-.table-warning td {
-  background-color: #fff3cd !important;
-}
+.table-danger td { background-color: #f8d7da !important; }
+.table-warning td { background-color: #fff3cd !important; }
 
 /* 🔍 Buscador */
-#buscar-producto {
-  max-width: 400px;
-}
+#buscar-producto { max-width: 400px; }
 
 /* 📱 Ajustes para móviles */
 @media (max-width: 768px) {
@@ -111,12 +103,12 @@
 </style>
 
 <script>
+// 🔍 Filtrar productos por nombre o código
 document.addEventListener("DOMContentLoaded", function() {
   const inputBuscar = document.getElementById("buscar-producto");
   const tabla = document.getElementById("tabla-productos");
   const filas = tabla ? tabla.getElementsByTagName("tr") : [];
 
-  // 🔍 Filtrar productos por nombre o código
   inputBuscar.addEventListener("keyup", function() {
     const filtro = inputBuscar.value.toLowerCase();
     for (let i = 1; i < filas.length; i++) {
@@ -125,6 +117,60 @@ document.addEventListener("DOMContentLoaded", function() {
       const codigo = cols[1].textContent.toLowerCase();
       const nombre = cols[2].textContent.toLowerCase();
       filas[i].style.display = (codigo.includes(filtro) || nombre.includes(filtro)) ? "" : "none";
+    }
+  });
+});
+
+// 🟢 Registrar venta sin recargar
+document.querySelectorAll(".form-vender").forEach(form => {
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    const id = form.action.split("/").pop();
+    const cantidad = form.querySelector("input[name='cantidad']").value;
+    const fila = form.closest("tr");
+
+    if (!cantidad || cantidad <= 0) return alert("Ingrese una cantidad válida.");
+
+    try {
+      const res = await fetch(`/vender/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cantidad })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        // Actualizar fila
+        const vendidasCelda = fila.querySelector(".vendidas-dia");
+        const valorCelda = fila.querySelector(".valor-vendido-dia");
+        const stockCelda = fila.querySelector(".stock-actual");
+
+        vendidasCelda.textContent = parseInt(vendidasCelda.textContent) + data.cantidad;
+        valorCelda.textContent = (parseFloat(valorCelda.textContent) + parseFloat(data.monto)).toFixed(2);
+        stockCelda.textContent = data.stock;
+
+        // Actualizar total vendido
+        const totalHoy = document.getElementById("total-vendido-hoy");
+        totalHoy.textContent = (parseFloat(totalHoy.textContent) + parseFloat(data.monto)).toFixed(2);
+
+        // Resaltar fila
+        fila.classList.add("highlight");
+        setTimeout(() => fila.classList.remove("highlight"), 2000);
+
+        // Limpiar campo
+        form.querySelector("input[name='cantidad']").value = "";
+
+        // Mostrar alerta elegante
+        const alertBox = document.createElement("div");
+        alertBox.className = "alert alert-success position-fixed bottom-0 end-0 m-3 shadow";
+        alertBox.textContent = `Venta registrada: ${data.nombre} (${data.cantidad} uds - $${data.monto.toFixed(2)})`;
+        document.body.appendChild(alertBox);
+        setTimeout(() => alertBox.remove(), 2500);
+      } else {
+        alert(data.error || "Error al registrar la venta.");
+      }
+    } catch (err) {
+      alert("Error de conexión con el servidor.");
     }
   });
 });

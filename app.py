@@ -248,22 +248,35 @@ def actualizar_orden_producto(producto_id):
 # ---------------------------
 # REGISTRAR VENTA (versión corregida)
 # ---------------------------
+from flask import jsonify, request
+
 @app.route("/vender/<int:producto_id>", methods=["POST"])
 @login_required
 def vender(producto_id):
     producto = Producto.query.get_or_404(producto_id)
-    try:
-        cantidad = int(request.form.get("cantidad", 0))
-    except ValueError:
-        flash("Cantidad inválida", "warning")
-        return redirect(url_for("index"))
+
+    # ✅ Detectar si viene JSON (desde fetch)
+    if request.is_json:
+        data = request.get_json()
+        cantidad = int(data.get("cantidad", 0))
+    else:
+        try:
+            cantidad = int(request.form.get("cantidad", 0))
+        except ValueError:
+            cantidad = 0
 
     if cantidad <= 0:
-        flash("Cantidad inválida", "warning")
+        mensaje = "Cantidad inválida."
+        if request.is_json:
+            return jsonify({"success": False, "error": mensaje}), 400
+        flash(mensaje, "warning")
         return redirect(url_for("index"))
 
     if producto.unidades_restantes < cantidad:
-        flash("No hay suficientes unidades disponibles.", "danger")
+        mensaje = "No hay suficientes unidades disponibles."
+        if request.is_json:
+            return jsonify({"success": False, "error": mensaje}), 400
+        flash(mensaje, "danger")
         return redirect(url_for("index"))
 
     # 🧮 Calcular ingreso con ganancia
@@ -275,7 +288,6 @@ def vender(producto_id):
     producto.vendidas_dia = (producto.vendidas_dia or 0) + cantidad
     producto.valor_vendido_dia = (producto.valor_vendido_dia or 0) + ingreso
 
-    # 💾 Asegurar que el producto quede marcado para actualizar
     db.session.add(producto)
 
     # 💾 Registrar la venta
@@ -286,54 +298,22 @@ def vender(producto_id):
         fecha=datetime.utcnow()
     )
     db.session.add(venta)
-
-    # 💰 Registrar movimiento en caja
-    mov = MovimientoCaja(
-        tipo="entrada",
-        monto=ingreso,
-        descripcion=f"Venta de {producto.nombre}",
-        fecha=datetime.utcnow()
-    )
-    db.session.add(mov)
-
-    # ✅ Guardar cambios
     db.session.commit()
 
-    # 🌟 Resaltar producto vendido
+    # 🌟 Si viene JSON, devolvemos respuesta rápida
+    if request.is_json:
+        return jsonify({
+            "success": True,
+            "nombre": producto.nombre,
+            "cantidad": cantidad,
+            "monto": ingreso,
+            "stock": producto.unidades_restantes
+        })
+
+    # Si no viene JSON (venta manual desde formulario normal)
     session["resaltado"] = producto.id
     flash(f"Venta registrada: {producto.nombre} ({cantidad} unidades, ${ingreso:,.2f}).", "success")
-
     return redirect(url_for("index"))
-
-# ---------------------------
-# ELIMINAR VENTA (ajusta caja y producto)
-# ---------------------------
-@app.route("/eliminar_venta/<int:venta_id>", methods=["POST"])
-@login_required
-def eliminar_venta(venta_id):
-    venta = Venta.query.get_or_404(venta_id)
-    producto = Producto.query.get(venta.producto_id)
-
-    # Revertir unidades vendidas
-    producto.unidades_restantes += venta.cantidad
-    producto.vendidas_dia = max((producto.vendidas_dia or 0) - venta.cantidad, 0)
-    producto.valor_vendido_dia = max((producto.valor_vendido_dia or 0) - venta.ingreso, 0)
-
-    # Revertir en caja
-    mov = MovimientoCaja(
-        tipo="salida",
-        monto=venta.ingreso,
-        descripcion=f"Anulación de venta: {producto.nombre}",
-        fecha=datetime.utcnow()
-    )
-    db.session.add(mov)
-
-    # Eliminar la venta
-    db.session.delete(venta)
-    db.session.commit()
-
-    flash(f"Venta eliminada: {producto.nombre} ({venta.cantidad} unidades, -${venta.ingreso:,.2f}).", "warning")
-    return redirect(url_for("liquidacion"))
 
 
 # ---------------------------
@@ -391,24 +371,39 @@ def liquidacion():
 
     start, end = day_range(fecha_consulta)
 
+    # 🧾 Total de ventas del día (solo de la tabla Venta)
     ventas_dia = db.session.query(func.coalesce(func.sum(Venta.ingreso), 0)) \
         .filter(Venta.fecha >= start, Venta.fecha < end).scalar() or 0.0
 
+    # 💰 Movimientos manuales de caja
     entradas_dia = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
-        .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end, MovimientoCaja.tipo == "entrada").scalar() or 0.0
+        .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end,
+                MovimientoCaja.tipo == "entrada").scalar() or 0.0
 
     salidas_dia = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
-        .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end, MovimientoCaja.tipo == "salida").scalar() or 0.0
+        .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end,
+                MovimientoCaja.tipo == "salida").scalar() or 0.0
 
     gastos_dia = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
-        .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end, MovimientoCaja.tipo == "gasto").scalar() or 0.0
+        .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end,
+                MovimientoCaja.tipo == "gasto").scalar() or 0.0
 
+    # 🧮 Caja del día (modo actual — sin duplicar)
     caja_dia = float(ventas_dia) + float(entradas_dia) - float(salidas_dia) - float(gastos_dia)
 
+    # ---------------------------
+    # 🔵 OPCIÓN AUDITABLE (activar solo si vuelves a registrar ventas en MovimientoCaja)
+    # En ese caso, usa esta fórmula y comenta la línea anterior:
+    #
+    # caja_dia = float(entradas_dia) - float(salidas_dia) - float(gastos_dia)
+    # ---------------------------
+
+    # 💼 Valor total del inventario
     inventario_valor = float(db.session.query(
         func.coalesce(func.sum(Producto.unidades_restantes * Producto.valor_unitario * (1 + Producto.interes / 100)), 0)
     ).scalar() or 0.0)
 
+    # 📊 Guardar o actualizar liquidación
     liq = Liquidacion.query.filter_by(fecha=fecha_consulta).first()
     if not liq:
         liq = Liquidacion(
@@ -427,6 +422,7 @@ def liquidacion():
 
     db.session.commit()
 
+    # 🧾 Ventas detalladas del día
     ventas_detalle = Venta.query.filter(Venta.fecha >= start, Venta.fecha < end).order_by(Venta.fecha).all()
 
     return render_template(
@@ -436,7 +432,7 @@ def liquidacion():
         ventas_dia=ventas_detalle,
         total_caja=liq.caja,
         inventario_valor=inventario_valor,
-        caja_total_global=sum(l.caja or 0 for l in Liquidacion.query.all())  # 💰 Total acumulado
+        caja_total_global=sum(l.caja or 0 for l in Liquidacion.query.all())
     )
 
 # ---------------------------
