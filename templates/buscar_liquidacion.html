@@ -1,20 +1,62 @@
 {% extends "base.html" %}
-{% block content %}
-<div class="container mt-4">
-  <h2>Buscar Liquidación por Rango de Fechas</h2>
+{% block title %}Buscar Liquidación{% endblock %}
 
-  <form method="POST" class="row g-3 mt-3">
-    <div class="col-md-5">
-      <label for="fecha_inicio" class="form-label">Desde</label>
-      <input type="date" name="fecha_inicio" id="fecha_inicio" class="form-control" required>
+{% block content %}
+<div class="container mt-5">
+  <div class="card shadow-lg border-0">
+    <div class="card-header bg-dark text-white">
+      <h4 class="mb-0">📅 Buscar Liquidación por Rango de Fechas</h4>
     </div>
-    <div class="col-md-5">
-      <label for="fecha_fin" class="form-label">Hasta</label>
-      <input type="date" name="fecha_fin" id="fecha_fin" class="form-control" required>
+
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('app_rutas.historial_liquidaciones') }}" class="row g-3">
+        <div class="col-md-5">
+          <label for="fecha_inicio" class="form-label fw-semibold">Desde</label>
+          <input type="date" name="fecha_inicio" id="fecha_inicio" class="form-control" required>
+        </div>
+
+        <div class="col-md-5">
+          <label for="fecha_fin" class="form-label fw-semibold">Hasta</label>
+          <input type="date" name="fecha_fin" id="fecha_fin" class="form-control" required>
+        </div>
+
+        <div class="col-md-2 d-flex align-items-end">
+          <button type="submit" class="btn btn-primary w-100">
+            🔍 Buscar
+          </button>
+        </div>
+      </form>
     </div>
-    <div class="col-md-2 d-flex align-items-end">
-      <button type="submit" class="btn btn-primary w-100">Buscar</button>
-    </div>
-  </form>
+  </div>
+
+  {% if liquidaciones %}
+  <div class="mt-5">
+    <h5>Resultados:</h5>
+    <table class="table table-striped align-middle text-center">
+      <thead class="table-dark">
+        <tr>
+          <th>Fecha</th>
+          <th>Caja Anterior</th>
+          <th>Entrada Inventario</th>
+          <th>Salida Efectivo</th>
+          <th>Caja Actual</th>
+          <th>Inventario Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for liq in liquidaciones %}
+        <tr>
+          <td>{{ liq.fecha.strftime("%d/%m/%Y") }}</td>
+          <td>${{ "{:,.2f}".format(liq.caja_anterior or 0) }}</td>
+          <td>${{ "{:,.2f}".format(liq.entrada_inventario or 0) }}</td>
+          <td>${{ "{:,.2f}".format(liq.salida_efectivo or 0) }}</td>
+          <td>${{ "{:,.2f}".format(liq.caja_actual or 0) }}</td>
+          <td>${{ "{:,.2f}".format(liq.inventario_total or 0) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}📦 Inventario{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+
+  <!-- 🔹 Encabezado -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">📦 Control de Inventario</h2>
+    <div class="d-flex gap-2">
+      <!-- ✅ Redirige al mismo formulario que el index -->
+      <a href="{{ url_for('app_rutas.nuevo_producto') }}" class="btn btn-primary fw-bold">
+        ➕ Nuevo Producto
+      </a>
+      <a href="{{ url_for('app_rutas.index') }}" class="btn btn-secondary fw-bold">
+        ⬅ Volver al Inicio
+      </a>
+    </div>
+  </div>
+
+  <!-- 🧾 Formulario de Entrada -->
+  <div class="card shadow-sm mb-4 border-0">
+    <div class="card-header bg-dark text-white">
+      <h5 class="mb-0">📥 Registrar Entrada de Producto Existente</h5>
+    </div>
+    <div class="card-body">
+      <form method="POST" class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Código del Producto</label>
+          <input type="text" name="codigo" class="form-control" placeholder="Ej: 123456" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Cantidad a Ingresar</label>
+          <input type="number" name="cantidad" class="form-control" min="1" required>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+          <button type="submit" class="btn btn-success w-100 fw-bold">
+            💾 Registrar Entrada
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 📋 Tabla de Productos -->
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+      <h5 class="mb-0">📊 Inventario Actual</h5>
+      <small class="text-light">Última actualización automática</small>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table id="tabla-productos" class="table table-hover align-middle text-center mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>Orden</th>
+              <th>Código</th>
+              <th>Producto</th>
+              <th>Valor Unitario</th>
+              <th>Ganancia (%)</th>
+              <th>Stock</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if productos %}
+              {% for p in productos %}
+              <tr>
+                <td>{{ p.orden }}</td>
+                <td>{{ p.codigo }}</td>
+                <td class="fw-bold">{{ p.nombre }}</td>
+                <td>${{ "%.2f"|format(p.valor_unitario) }}</td>
+                <td>{{ "%.1f"|format(p.interes) }}%</td>
+                <td>{{ p.unidades_restantes }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="6" class="text-center text-muted py-3">⚠️ No hay productos en inventario.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 📜 Historial -->
+  <div class="card shadow-sm mt-4 border-0">
+    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+      <h5 class="mb-0">🕒 Historial de Entradas (últimos 90 días)</h5>
+      <small class="text-light">Se limpia automáticamente</small>
+    </div>
+    <div class="card-body p-0">
+      {% if historial %}
+      <div class="table-responsive">
+        <table class="table table-striped table-bordered align-middle text-center mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>Fecha</th>
+              <th>Código</th>
+              <th>Producto</th>
+              <th>Cantidad</th>
+              <th>Valor Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for h in historial %}
+            <tr>
+              <td>{{ h.fecha.strftime("%d-%m-%Y") }}</td>
+              <td>{{ h.producto.codigo }}</td>
+              <td class="fw-bold">{{ h.producto.nombre }}</td>
+              <td>{{ h.cantidad }}</td>
+              <td>${{ "%.2f"|format(h.valor_total) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="p-4 text-center text-muted">Sin registros en los últimos 90 días.</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+  // Inicializa DataTables
+  $('#tabla-productos').DataTable({
+    pageLength: 10,
+    order: [[0, 'asc']],
+    language: {
+      url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
+    }
+  });
+});
+</script>
+{% endblock %}

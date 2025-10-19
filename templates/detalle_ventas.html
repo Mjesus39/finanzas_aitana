@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}📈 Detalle de Ventas{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">📈 Detalle de Ventas — {{ fecha.strftime("%d/%m/%Y") }}</h2>
+    <a href="{{ url_for('app_rutas.liquidacion') }}" class="btn btn-outline-dark">⬅ Volver</a>
+  </div>
+
+  {% if ventas %}
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover text-center align-middle shadow-sm">
+      <thead class="table-dark">
+        <tr>
+          <th>Hora</th>
+          <th>Producto</th>
+          <th>Cantidad</th>
+          <th>Ingreso</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v, p in ventas %}
+        <tr>
+          <td>{{ v.fecha.strftime("%H:%M:%S") }}</td>
+          <td class="fw-bold">{{ p.nombre }}</td>
+          <td>{{ v.cantidad }}</td>
+          <td>${{ "%.2f"|format(v.ingreso) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light">
+        <tr class="fw-bold">
+          <td colspan="3" class="text-end">Total del Día:</td>
+          <td>${{ "%.2f"|format(total_dia) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <div class="alert alert-info text-center">No se registraron ventas en esta fecha.</div>
+  {% endif %}
+</div>
+{% endblock %}

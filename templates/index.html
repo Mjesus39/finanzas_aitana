@@ -1,161 +1,177 @@
 {% extends "base.html" %}
-{% block title %}Inicio{% endblock %}
+{% block title %}Inventario{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">Listado de Productos</h2>
+<div class="container mt-4">
+  <h2 class="mb-4 text-center">📦 Inventario de Productos</h2>
 
-<div class="mb-3 d-flex flex-column flex-md-row gap-2">
+  <!-- 🔹 Encabezado -->
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-3 gap-2">
     <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-primary" href="{{ url_for('nuevo_producto') }}">➕ Nuevo Producto</a>
-        <a class="btn btn-secondary" href="{{ url_for('liquidacion') }}">📊 Ver Liquidación</a>
+      <a class="btn btn-primary" href="{{ url_for('app_rutas.nuevo_producto') }}">➕ Nuevo Producto</a>
+      <a class="btn btn-secondary" href="{{ url_for('app_rutas.liquidacion') }}">📊 Ver Liquidación</a>
     </div>
-    <input type="text" id="buscar-producto" class="form-control mt-2 mt-md-0" placeholder="Buscar producto por nombre o código...">
+    <input type="text" id="buscar-producto" class="form-control mt-2 mt-md-0" placeholder="🔍 Buscar por código o nombre...">
+  </div>
+
+  {% if productos %}
+  <div class="table-responsive">
+    <table id="tabla-productos" class="table table-bordered table-hover align-middle text-center shadow-sm">
+      <thead class="table-dark">
+        <tr>
+          <th>Orden</th>
+          <th>Código</th>
+          <th>Nombre</th>
+          <th>Precio con Ganancia</th>
+          <th>Stock Actual</th>
+          <th>Vender</th>
+          <th>Vendidas Hoy</th>
+          <th>Valor Vendido</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in productos %}
+        {% set precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
+        <tr id="producto-{{ p.id }}" class="{{ estado_class(p) }}">
+          <td>{{ p.orden }}</td>
+          <td class="col-codigo">{{ p.codigo }}</td>
+          <td class="fw-bold col-nombre">{{ p.nombre }}</td>
+          <td class="precio-ganancia">{{ "%.2f"|format(precio_ganancia) }}</td>
+          <td class="stock-actual">{{ p.unidades_restantes or 0 }}</td>
+
+          <!-- Formulario de venta (AJAX) -->
+          <td>
+            <form class="form-vender d-flex justify-content-center" 
+                  data-id="{{ p.id }}" 
+                  data-action="{{ url_for('app_rutas.vender', producto_id=p.id) }}">
+              <input type="number" step="1" min="1" max="{{ p.unidades_restantes }}" name="cantidad"
+                     placeholder="0" class="form-control text-end cantidad-input fs-5 fw-bold"
+                     style="width:110px; height:46px;" required>
+              <button type="submit" class="btn btn-success ms-2 fs-5 btn-vender">💵</button>
+            </form>
+          </td>
+
+          <td class="vendidas-dia">{{ p.vendidas_dia or 0 }}</td>
+          <td class="valor-vendido-dia">{{ "%.2f"|format(p.valor_vendido_dia or 0) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light">
+        <tr>
+          <th colspan="7" class="text-end">Total Vendido Hoy:</th>
+          <th id="total-vendido-hoy">{{ "%.2f"|format(total_vendido or 0) }}</th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <div class="alert alert-info text-center mt-4">No hay productos registrados todavía.</div>
+  {% endif %}
 </div>
 
-{% if productos %}
-<table id="tabla-productos" class="table table-bordered table-hover align-middle text-center">
-  <thead class="table-dark">
-    <tr>
-      <th>Orden</th>
-      <th>Código</th>
-      <th>Nombre</th>
-      <th>Precio con Ganancia</th>
-      <th>Unidades Iniciales</th>
-      <th>Vender</th>
-      <th>Unidades Vendidas (día)</th>
-      <th>Valor Vendido (día)</th>
-      <th>💲 Editar Precio</th> <!-- Nueva columna -->
-    </tr>
-  </thead>
-  <tbody>
-    {% for p in productos %}
-    {% set precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
-    <tr id="producto-{{ p.id }}" class="{{ estado_class(p) }}">
-      <!-- Orden -->
-      <td style="width:100px;">
-        <form action="{{ url_for('actualizar_orden_producto', producto_id=p.id) }}" method="post" class="d-flex actualizar-orden-form">
-          <input type="number" name="orden" value="{{ p.orden }}" class="form-control text-center" style="width:70px;">
-          <button type="submit" class="btn btn-outline-primary ms-1 btn-sm">✔</button>
-        </form>
-      </td>
+<!-- ✅ Toasts (éxito / error) -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
+  <div id="toast-success" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body" id="toast-success-text">Venta registrada.</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+  <div id="toast-error" class="toast align-items-center text-bg-danger border-0 mt-2" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body" id="toast-error-text">Error al registrar la venta.</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+{% endblock %}
 
-      <td>{{ p.codigo }}</td>
-      <td>{{ p.nombre }}</td>
-      <td class="precio-ganancia">{{ "%.2f"|format(precio_ganancia) }}</td>
-      <td class="stock-actual">{{ p.unidades_restantes or 0 }}</td>
-
-      <!-- Input de venta -->
-      <td>
-        <form action="{{ url_for('vender', producto_id=p.id) }}" method="post" class="d-flex form-vender justify-content-center">
-          <input type="number" step="1" min="1" max="{{ p.unidades_restantes }}" name="cantidad"
-                 placeholder="0" class="form-control text-end cantidad-input fs-5 fw-bold" 
-                 style="width:120px; height:50px; font-size:1.4rem;" required>
-          <button type="submit" class="btn btn-success ms-2" style="font-size:1.4rem; padding:0 15px;">💵</button>
-        </form>
-      </td>
-
-      <td class="vendidas-dia fs-6">{{ p.vendidas_dia or 0 }}</td>
-      <td class="valor-vendido-dia fs-6">{{ "%.2f"|format(p.valor_vendido_dia or 0) }}</td>
-
-      <!-- Nueva celda para editar precio -->
-      <td>
-        <form class="form-editar-precio d-flex justify-content-center" data-id="{{ p.id }}">
-          <input type="number" step="0.01" min="0" name="nuevo_precio" value="{{ p.valor_unitario }}"
-                 class="form-control text-end" style="width:100px;" required>
-          <button type="submit" class="btn btn-outline-success btn-sm ms-2">💾</button>
-        </form>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-  <tfoot>
-    <tr>
-      <th colspan="8" class="text-end">Total Vendido Hoy</th>
-      <th id="total-vendido-hoy">{{ "%.2f"|format(total_vendido) }}</th>
-    </tr>
-  </tfoot>
-</table>
-{% else %}
-<div class="alert alert-info">No hay productos registrados todavía.</div>
-{% endif %}
-
-<style>
-.highlight { background-color: #c8f7c5 !important; transition: background-color 2s ease; }
-.table-danger td { background-color: #f8d7da !important; }
-.table-warning td { background-color: #fff3cd !important; }
-#buscar-producto { max-width: 400px; }
-@media (max-width: 768px) {
-  .cantidad-input { width: 160px !important; height: 60px !important; font-size: 1.8rem !important; }
-  .btn-success { font-size: 1.8rem !important; padding: 5px 20px !important; }
-}
-</style>
-
+{% block scripts %}
 <script>
-document.addEventListener("DOMContentLoaded", function() {
-  // 🔍 Filtro de productos
-  const inputBuscar = document.getElementById("buscar-producto");
-  const tabla = document.getElementById("tabla-productos");
-  const filas = tabla ? tabla.getElementsByTagName("tr") : [];
+(function () {
+  const $ = (sel, ctx=document) => ctx.querySelector(sel);
+  const $$ = (sel, ctx=document) => Array.from(ctx.querySelectorAll(sel));
 
-  inputBuscar.addEventListener("keyup", function() {
-    const filtro = inputBuscar.value.toLowerCase();
-    for (let i = 1; i < filas.length; i++) {
-      const cols = filas[i].getElementsByTagName("td");
-      if (cols.length === 0) continue;
-      const codigo = cols[1].textContent.toLowerCase();
-      const nombre = cols[2].textContent.toLowerCase();
-      filas[i].style.display = (codigo.includes(filtro) || nombre.includes(filtro)) ? "" : "none";
-    }
-  });
-
-  // 🟢 Desplazarse automáticamente al producto recién agregado
-  if (window.location.hash) {
-    const id = window.location.hash.substring(1);
-    const fila = document.getElementById(id);
-    if (fila) {
-      fila.classList.add("highlight");
-      fila.scrollIntoView({ behavior: "smooth", block: "center" });
-      setTimeout(() => fila.classList.remove("highlight"), 4000);
-    }
+  // 🔍 Búsqueda en vivo (por código o nombre)
+  const inputBuscar = $("#buscar-producto");
+  if (inputBuscar) {
+    inputBuscar.addEventListener("keyup", () => {
+      const f = inputBuscar.value.toLowerCase();
+      $$("#tabla-productos tbody tr").forEach(tr => {
+        const codigo = tr.querySelector(".col-codigo")?.textContent.toLowerCase() || "";
+        const nombre = tr.querySelector(".col-nombre")?.textContent.toLowerCase() || "";
+        tr.style.display = (codigo.includes(f) || nombre.includes(f)) ? "" : "none";
+      });
+    });
   }
 
-  // 💲 Editar precio sin recargar
-  document.querySelectorAll(".form-editar-precio").forEach(form => {
-    form.addEventListener("submit", async e => {
-      e.preventDefault();
+  // 🎵 Toasts
+  const toastOk = new bootstrap.Toast($("#toast-success"), { delay: 2000 });
+  const toastErr = new bootstrap.Toast($("#toast-error"), { delay: 3000 });
+  const okText = $("#toast-success-text"), errText = $("#toast-error-text");
+
+  // 🧮 Helpers
+  const toNum = (txt) => parseFloat(String(txt).replaceAll(",", "").trim()) || 0;
+  const fmt2  = (n) => (Math.round(n * 100) / 100).toFixed(2);
+
+  // 🛒 Venta AJAX correcta (sin recargar)
+  $$(".form-vender").forEach(form => {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault(); // ✅ evita el GET /?cantidad=1
+      const btn = form.querySelector(".btn-vender");
+      const input = form.querySelector("input[name='cantidad']");
+      const cantidad = parseInt(input.value);
       const id = form.dataset.id;
-      const nuevo_precio = form.querySelector("input[name='nuevo_precio']").value;
-      const fila = document.getElementById("producto-" + id);
+      const action = form.dataset.action;
+
+      const fila = $("#producto-" + id);
+      const stockEl = fila.querySelector(".stock-actual");
+      const vendidasEl = fila.querySelector(".vendidas-dia");
+      const valorEl = fila.querySelector(".valor-vendido-dia");
+      const totalEl = $("#total-vendido-hoy");
+
+      if (!cantidad || cantidad <= 0) {
+        errText.textContent = "Cantidad inválida.";
+        toastErr.show();
+        return;
+      }
+
+      btn.disabled = true;
 
       try {
-        const res = await fetch(`/editar_precio/${id}`, {
+        const res = await fetch(action, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nuevo_precio })
+          body: JSON.stringify({ cantidad })
         });
 
         const data = await res.json();
         if (data.success) {
-          // Actualizar visualmente el precio con ganancia
-          const precioGanancia = fila.querySelector(".precio-ganancia");
-          precioGanancia.textContent = data.precio_ganancia.toFixed(2);
-          fila.classList.add("highlight");
-          setTimeout(() => fila.classList.remove("highlight"), 3000);
+          stockEl.textContent = data.stock;
+          vendidasEl.textContent = data.vendidas_dia;
+          valorEl.textContent = fmt2(data.valor_vendido_dia);
+          totalEl.textContent = fmt2(toNum(totalEl.textContent) + data.monto);
 
-          // Mostrar confirmación
-          const alertBox = document.createElement("div");
-          alertBox.className = "alert alert-success position-fixed bottom-0 end-0 m-3 shadow";
-          alertBox.textContent = `Precio actualizado para ${data.nombre}`;
-          document.body.appendChild(alertBox);
-          setTimeout(() => alertBox.remove(), 2500);
+          okText.textContent = `✅ Venta registrada: ${data.nombre} (${cantidad})`;
+          toastOk.show();
+          input.value = "";
         } else {
-          alert(data.error || "Error al actualizar el precio.");
+          errText.textContent = data.error || "Error al registrar venta.";
+          toastErr.show();
         }
       } catch (err) {
-        alert("Error de conexión con el servidor.");
+        errText.textContent = "Error de conexión con el servidor.";
+        toastErr.show();
+      } finally {
+        btn.disabled = false;
       }
     });
   });
-});
+})();
 </script>
+
+<style>
+.table td, .table th { vertical-align: middle !important; }
+.table-danger td { background-color: #f8d7da !important; }
+</style>
 {% endblock %}

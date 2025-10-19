@@ -1,145 +1,82 @@
-
 {% extends "base.html" %}
-{% block title %}Liquidación{% endblock %}
+{% block title %}📊 Liquidación de Productos{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h2>📊 Liquidación</h2>
+  <h2 class="text-center mb-4">📊 Liquidación de Productos</h2>
 
-    <!-- Selector de fecha -->
-    <form id="form-fecha" method="POST" class="mb-3 d-flex align-items-center gap-2">
-        <label for="fecha" class="fw-bold">📅 Fecha:</label>
-        <input type="date" id="fecha" name="fecha" value="{{ fecha_consulta }}" class="form-control" style="width: 200px;">
-        <button type="submit" class="btn btn-primary">🔍 Consultar</button>
-    </form>
+  <!-- 📅 Selector de fechas -->
+  <form method="POST" class="d-flex justify-content-center align-items-center gap-2 mb-4">
+    <label for="fecha_inicio" class="fw-bold">Desde:</label>
+    <input type="date" name="fecha_inicio" value="{{ fecha_inicio }}" class="form-control w-auto" required>
+    <label for="fecha_fin" class="fw-bold">Hasta:</label>
+    <input type="date" name="fecha_fin" value="{{ fecha_fin }}" class="form-control w-auto" required>
+    <button type="submit" class="btn btn-primary">🔍 Buscar</button>
+  </form>
 
-    <!-- 💰 Caja total acumulada -->
-    <div class="card border-success mb-3">
-        <div class="card-body">
-            <h5>💰 <a href="{{ url_for('caja_total') }}" class="text-success text-decoration-none">
-                Caja Total Acumulada
-            </a>:</h5>
-            <h4 class="fw-bold text-success">$ {{ "%.2f"|format(caja_total_global) }}</h4>
-            <small class="text-muted">Haz clic para ver el desglose diario.</small>
-        </div>
-    </div>
+  <p class="text-center fw-bold mb-3">
+    🗓️ Última liquidación: {{ ultima_fecha.strftime("%d-%m-%Y") if ultima_fecha else "N/A" }}
+  </p>
 
-    <!-- 🧾 Caja del día -->
-    <div class="card mb-3 shadow-sm">
-        <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
-            <div>
-                <h5>🧾 Liquidación del Día: <span id="fecha-dia">{{ fecha_consulta }}</span></h5>
-                <p><strong>💵 Caja del Día:</strong> $<span id="caja-dia">{{ "%.2f"|format(total_caja) }}</span></p>
-                <p><strong>📦 Inventario Total:</strong> $<span id="inventario-dia">{{ "%.2f"|format(inventario_valor) }}</span></p>
-            </div>
-
-            <!-- 🔗 Botón de detalle de caja -->
-            <div class="text-md-end">
-                <a href="{{ url_for('detalle_dia', fecha=date.today().strftime('%Y-%m-%d')) }}"
-                   class="btn btn-outline-primary fw-bold px-4 shadow-sm">
-                    📅 Ver Detalle de Caja de Hoy
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <!-- Formularios de caja -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <form action="{{ url_for('caja_entrada') }}" method="POST" class="d-flex gap-2">
-                <input type="number" name="monto" step="0.01" placeholder="Monto" class="form-control" required>
-                <input type="text" name="descripcion" placeholder="Descripción (opcional)" class="form-control">
-                <button type="submit" class="btn btn-success">💰 Entrada</button>
-            </form>
-        </div>
-        <div class="col-md-6">
-            <form action="{{ url_for('caja_salida') }}" method="POST" class="d-flex gap-2">
-                <input type="number" name="monto" step="0.01" placeholder="Monto" class="form-control" required>
-                <input type="text" name="descripcion" placeholder="Descripción (opcional)" class="form-control">
-                <button type="submit" class="btn btn-danger">💸 Salida</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Ingresar inventario -->
-    <div class="card mb-4">
-        <div class="card-body">
-            <h5>📦 Ingresar Inventario</h5>
-            <form action="{{ url_for('ingresar_inventario_por_codigo') }}" method="POST" class="d-flex gap-2">
-                <input type="text" name="codigo" placeholder="Código del producto" class="form-control" required>
-                <input type="number" name="cantidad" step="1" placeholder="Cantidad" class="form-control" required>
-                <button type="submit" class="btn btn-warning">📥 Ingresar</button>
-            </form>
-            <small class="text-muted">El inventario se actualizará automáticamente.</small>
-        </div>
-    </div>
-
-    <!-- Tabla de ventas -->
-    <h5 class="mt-4">🛒 Ventas del Día</h5>
-    <div id="tabla-ventas">
-        {% if ventas_dia %}
-        <table class="table table-bordered table-striped text-center align-middle mt-2">
-            <thead class="table-dark">
-                <tr>
-                    <th>Hora</th>
-                    <th>Producto</th>
-                    <th>Cantidad</th>
-                    <th>Ingreso</th>
-                    <th>Eliminar</th>
-                </tr>
-            </thead>
-            <tbody id="ventas-body">
-                {% for v in ventas_dia %}
-                <tr>
-                    <td>{{ v.fecha.strftime("%H:%M") }}</td>
-                    <td>{{ v.producto.nombre }}</td>
-                    <td>{{ v.cantidad }}</td>
-                    <td>${{ "%.2f"|format(v.ingreso) }}</td>
-                    <td>
-                        <form action="{{ url_for('eliminar_venta', venta_id=v.id) }}" method="post" style="display:inline;">
-                            <button type="submit" class="btn btn-danger btn-sm">🗑️</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="alert alert-info">No hay ventas registradas para esta fecha.</div>
-        {% endif %}
-    </div>
+  {% if liquidaciones %}
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover text-center align-middle shadow-sm">
+      <thead class="table-dark">
+        <tr>
+          <th>Fecha</th>
+          <th>Ingresos</th>
+          <th>Caja anterior</th>
+          <th>Entr.Efec.</th>
+          <th>Ventas</th>
+          <th>Gastos</th>
+          <th>Salida efectivo</th>
+          <th>Caja</th>
+          <th>Día tasado</th>
+          <th>Suma Paquete</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in liquidaciones %}
+        <tr>
+          <td>{{ d.fecha.strftime("%d-%m-%Y") }}</td>
+          <td>${{ "%.2f"|format(d.ingresos or 0) }}</td>
+          <td>${{ "%.2f"|format(d.caja_anterior or 0) }}</td>
+          <td>${{ "%.2f"|format(d.entrada_efectivo or 0) }}</td>
+          <td>
+            <a href="{{ url_for('app_rutas.detalle_ventas', fecha=d.fecha.strftime('%Y-%m-%d')) }}" class="fw-bold text-success text-decoration-none">
+              ${{ "%.2f"|format(d.ventas_dia or 0) }}
+            </a>
+          </td>
+          <td>${{ "%.2f"|format(d.gastos or 0) }}</td>
+          <td>
+            <a href="{{ url_for('app_rutas.detalle_salida', fecha=d.fecha.strftime('%Y-%m-%d')) }}" class="fw-bold text-danger text-decoration-none">
+              ${{ "%.2f"|format(d.salida_efectivo or 0) }}
+            </a>
+          </td>
+          <td class="fw-bold text-primary">${{ "%.2f"|format(d.caja or 0) }}</td>
+          <td>${{ "%.2f"|format(d.dia_tasado or 0) }}</td>
+          <td>${{ "%.2f"|format(d.suma_paquete or 0) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light fw-bold">
+        <tr>
+          <td>Total</td>
+          <td>${{ "%.2f"|format(total_ingresos or 0) }}</td>
+          <td>${{ "%.2f"|format(caja_inicial or 0) }}</td>
+          <td>${{ "%.2f"|format(total_ingresos or 0) }}</td>
+          <td>${{ "%.2f"|format(total_ventas or 0) }}</td>
+          <td>0.00</td>
+          <td>${{ "%.2f"|format(total_salida or 0) }}</td>
+          <td>${{ "%.2f"|format(caja_final or 0) }}</td>
+          <td>${{ "%.2f"|format(total_dia_tasado or 0) }}</td>
+          <td>${{ "%.2f"|format(total_paquete or 0) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <div class="alert alert-info text-center">No se encontraron registros de liquidación.</div>
+  {% endif %}
 </div>
-
-<!-- 🔄 Autoactualización -->
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-    const formFecha = document.getElementById("form-fecha");
-    const fechaInput = document.getElementById("fecha");
-    const cajaDia = document.getElementById("caja-dia");
-    const inventarioDia = document.getElementById("inventario-dia");
-    const ventasBody = document.getElementById("ventas-body");
-    const fechaDia = document.getElementById("fecha-dia");
-
-    async function actualizarLiquidacion() {
-        const fecha = fechaInput.value;
-        const response = await fetch("/liquidacion", {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: `fecha=${fecha}`
-        });
-
-        const html = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, "text/html");
-
-        cajaDia.textContent = doc.querySelector("#caja-dia").textContent;
-        inventarioDia.textContent = doc.querySelector("#inventario-dia").textContent;
-        ventasBody.innerHTML = doc.querySelector("#ventas-body").innerHTML;
-        fechaDia.textContent = fecha;
-    }
-
-    setInterval(actualizarLiquidacion, 10000);
-    formFecha.addEventListener("submit", () => clearInterval());
-});
-</script>
 {% endblock %}

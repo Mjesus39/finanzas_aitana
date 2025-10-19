@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}📜 Historial de Inventario{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>📜 Historial de Inventario — Últimos 90 Días</h2>
+    <a href="{{ url_for('app_rutas.entrada_inventario') }}" class="btn btn-secondary">⬅ Volver</a>
+  </div>
+
+  {% if historial %}
+  <div class="table-responsive shadow-sm">
+    <table class="table table-bordered table-hover align-middle text-center">
+      <thead class="table-dark">
+        <tr>
+          <th>Fecha</th>
+          <th>Código</th>
+          <th>Producto</th>
+          <th>Cantidad Ingresada</th>
+          <th>Valor Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h, p in historial %}
+        <tr>
+          <td>{{ h.fecha.strftime("%d-%m-%Y %H:%M") }}</td>
+          <td>{{ p.codigo }}</td>
+          <td class="fw-bold">{{ p.nombre }}</td>
+          <td>{{ h.cantidad }}</td>
+          <td>${{ "%.2f"|format(h.valor_total) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="alert alert-info text-center mt-4">
+    📦 No hay registros de inventario en los últimos 90 días.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
