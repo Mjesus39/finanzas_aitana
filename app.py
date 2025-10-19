@@ -112,6 +112,32 @@ def day_range(fecha: date):
     start = datetime.combine(fecha, time.min)
     end = start + timedelta(days=1)
     return start, end
+from werkzeug.urls import iri_to_uri
+
+def _to_float(value):
+    """Convierte string con coma o punto a float de forma segura."""
+    if value is None or str(value).strip() == "":
+        return 0.0
+    return float(str(value).strip().replace(",", "."))
+
+def _to_int(value):
+    """Convierte string a entero de forma segura."""
+    if value is None or str(value).strip() == "":
+        return 0
+    return int(str(value).strip())
+def generar_codigo_numerico():
+    code = ''.join(random.choices("0123456789", k=6))
+    while Cliente.query.filter_by(codigo=code).first():
+        code = ''.join(random.choices("0123456789", k=6))
+    return code
+
+def generar_codigo_unico(modelo):
+    """Genera un código único de 6 dígitos para cualquier modelo."""
+    code = ''.join(random.choices("0123456789", k=6))
+    while modelo.query.filter_by(codigo=code).first():
+        code = ''.join(random.choices("0123456789", k=6))
+    return code
+
 
 # ---------------------------
 # LOGIN
@@ -184,29 +210,56 @@ def index():
 @app.route("/ingresar_inventario_por_codigo", methods=["POST"])
 @login_required
 def ingresar_inventario_por_codigo():
-    codigo = request.form.get("codigo", "").strip()
+    # Permitir JSON (fetch) y form clásico
+    if request.is_json:
+        data = request.get_json()
+        codigo = str(data.get("codigo", "")).strip()
+        cantidad_raw = data.get("cantidad", 0)
+    else:
+        codigo = request.form.get("codigo", "").strip()
+        cantidad_raw = request.form.get("cantidad", 0)
+
+    # Validaciones
     try:
-        cantidad = float(request.form.get("cantidad") or 0)
+        cantidad = int(float(str(cantidad_raw).replace(",", ".") or 0))
     except ValueError:
-        flash("Cantidad inválida", "danger")
-        return redirect(url_for("liquidacion"))
+        msg = "Cantidad inválida."
+        if request.is_json:
+            return jsonify({"success": False, "error": msg}), 400
+        flash(msg, "danger")
+        return redirect(url_for("index"))
 
-    if cantidad <= 0:
-        flash("Cantidad inválida", "danger")
-        return redirect(url_for("liquidacion"))
+    if not codigo or cantidad <= 0:
+        msg = "Código y cantidad son obligatorios."
+        if request.is_json:
+            return jsonify({"success": False, "error": msg}), 400
+        flash(msg, "danger")
+        return redirect(url_for("index"))
 
+    # Buscar producto
     producto = Producto.query.filter_by(codigo=codigo).first()
     if not producto:
-        flash("Código no encontrado", "danger")
-        return redirect(url_for("liquidacion"))
+        msg = "Código no encontrado."
+        if request.is_json:
+            return jsonify({"success": False, "error": msg}), 404
+        flash(msg, "danger")
+        return redirect(url_for("index"))
 
-    # Sumar al inventario actual y al stock inicial
+    # Actualizar inventario (coherente con tu otra ruta por código)
     producto.unidades_restantes += cantidad
     producto.stock_inicial += cantidad
-
     db.session.commit()
-    flash(f"Se ingresaron {cantidad} unidades a {producto.nombre}", "success")
-    return redirect(url_for("liquidacion"))
+
+    if request.is_json:
+        return jsonify({
+            "success": True,
+            "id": producto.id,
+            "nombre": producto.nombre,
+            "nuevo_stock": producto.unidades_restantes
+        })
+
+    flash(f"Se ingresaron {cantidad} unidades a {producto.nombre}.", "success")
+    return redirect(url_for("index") + f"#producto-{producto.id}")
 
 # ---------------------------
 # ACTUALIZAR ORDEN DE PRODUCTO
@@ -255,7 +308,7 @@ from flask import jsonify, request
 def vender(producto_id):
     producto = Producto.query.get_or_404(producto_id)
 
-    # ✅ Detectar si viene JSON (desde fetch)
+    # ✅ Detectar si viene JSON (desde fetch o llamada AJAX)
     if request.is_json:
         data = request.get_json()
         cantidad = int(data.get("cantidad", 0))
@@ -265,6 +318,7 @@ def vender(producto_id):
         except ValueError:
             cantidad = 0
 
+    # 🚫 Validaciones
     if cantidad <= 0:
         mensaje = "Cantidad inválida."
         if request.is_json:
@@ -283,24 +337,35 @@ def vender(producto_id):
     precio_con_ganancia = producto.valor_unitario * (1 + producto.interes / 100)
     ingreso = cantidad * precio_con_ganancia
 
-    # 🔄 Actualizar stock y ventas del día
+    # 🔄 Actualizar inventario y ventas del día
     producto.unidades_restantes -= cantidad
     producto.vendidas_dia = (producto.vendidas_dia or 0) + cantidad
     producto.valor_vendido_dia = (producto.valor_vendido_dia or 0) + ingreso
-
     db.session.add(producto)
 
-    # 💾 Registrar la venta
+    # 💾 Registrar la venta (ahora con hora local)
     venta = Venta(
         producto_id=producto.id,
         cantidad=cantidad,
         ingreso=ingreso,
-        fecha=datetime.utcnow()
+        fecha=datetime.now()  # 👈 se usa la hora local, no UTC
     )
     db.session.add(venta)
+
+    # 💼 Actualizar o crear la liquidación del día
+    hoy = date.today()
+    liq = Liquidacion.query.filter_by(fecha=hoy).first()
+    if not liq:
+        liq = Liquidacion(fecha=hoy, entrada=0.0, salida=0.0, caja=0.0, inventario_valor=0.0)
+        db.session.add(liq)
+
+    # 🧾 Sumar venta a la caja y entradas
+    liq.entrada = (liq.entrada or 0.0) + ingreso
+    liq.caja = (liq.caja or 0.0) + ingreso
+
     db.session.commit()
 
-    # 🌟 Si viene JSON, devolvemos respuesta rápida
+    # 🌟 Si viene desde AJAX/Fetch
     if request.is_json:
         return jsonify({
             "success": True,
@@ -310,9 +375,9 @@ def vender(producto_id):
             "stock": producto.unidades_restantes
         })
 
-    # Si no viene JSON (venta manual desde formulario normal)
+    # 🟢 Si es desde formulario normal
     session["resaltado"] = producto.id
-    flash(f"Venta registrada: {producto.nombre} ({cantidad} unidades, ${ingreso:,.2f}).", "success")
+    flash(f"Venta registrada: {producto.nombre} ({cantidad} uds, ${ingreso:,.2f}).", "success")
     return redirect(url_for("index"))
 
 
@@ -354,12 +419,117 @@ def caja_entrada():
 def caja_salida():
     return caja_movimiento("salida")
 
+@app.route("/venta/eliminar/<int:venta_id>", methods=["POST"])
+def eliminar_venta(venta_id):
+    venta = Venta.query.get_or_404(venta_id)
+    db.session.delete(venta)
+    db.session.commit()
+    flash("Venta eliminada correctamente.", "success")
+    return redirect(url_for("liquidacion"))
+
+@app.route("/producto/entrada/<int:producto_id>", methods=["POST"])
+@login_required
+def entrada_producto(producto_id):
+    producto = Producto.query.get_or_404(producto_id)
+
+    # Aceptar JSON (fetch) y form normal
+    if request.is_json:
+        data = request.get_json()
+        cantidad_raw = data.get("cantidad", 0)
+    else:
+        cantidad_raw = request.form.get("cantidad", 0)
+
+    # Validaciones
+    try:
+        cantidad = int(float(str(cantidad_raw).replace(",", ".") or 0))
+    except ValueError:
+        msg = "Cantidad inválida."
+        if request.is_json:
+            return jsonify({"success": False, "error": msg}), 400
+        flash(msg, "danger")
+        return redirect(url_for("index") + f"#producto-{producto.id}")
+
+    if cantidad <= 0:
+        msg = "La cantidad debe ser mayor a 0."
+        if request.is_json:
+            return jsonify({"success": False, "error": msg}), 400
+        flash(msg, "warning")
+        return redirect(url_for("index") + f"#producto-{producto.id}")
+
+    # Actualizar inventario (igual que por código para mantener consistencia)
+    producto.unidades_restantes += cantidad
+    producto.stock_inicial += cantidad
+    db.session.commit()
+
+    if request.is_json:
+        return jsonify({
+            "success": True,
+            "id": producto.id,
+            "nombre": producto.nombre,
+            "nuevo_stock": producto.unidades_restantes
+        })
+
+    flash(f"Entrada agregada al producto {producto.nombre}.", "success")
+    return redirect(url_for("index") + f"#producto-{producto.id}")
+# ---------------------------
+# LIQUIDAR CAJA TOTAL
+# ---------------------------
+@app.route("/liquidar_caja_total", methods=["POST"])
+@login_required
+def liquidar_caja_total():
+    """
+    💸 Liquida toda la caja acumulada registrando una salida total.
+    No borra el historial anterior, solo deja la caja de hoy en 0.
+    """
+    hoy = date.today()
+
+    # 📊 Obtener todas las liquidaciones para calcular el total acumulado
+    registros = Liquidacion.query.order_by(Liquidacion.fecha.asc()).all()
+    total_global = sum(r.caja or 0 for r in registros)
+
+    # ⚠️ Validar que haya dinero acumulado
+    if total_global <= 0:
+        flash("No hay caja acumulada para liquidar.", "warning")
+        return redirect(url_for("caja_total"))
+
+    # 💾 Registrar el movimiento de salida
+    movimiento = MovimientoCaja(
+        tipo="salida",
+        monto=total_global,
+        descripcion=f"Liquidación total de caja por ${total_global:,.2f}",
+        fecha=datetime.utcnow()
+    )
+    db.session.add(movimiento)
+
+    # 🧾 Dejar solo la caja del día actual en 0.0 (sin afectar el historial)
+    liquidacion_hoy = Liquidacion.query.filter_by(fecha=hoy).first()
+    if not liquidacion_hoy:
+        # Si no existe la liquidación de hoy, la creamos en 0
+        liquidacion_hoy = Liquidacion(
+            fecha=hoy,
+            entrada=0.0,
+            salida=0.0,
+            caja=0.0,
+            inventario_valor=0.0
+        )
+        db.session.add(liquidacion_hoy)
+    else:
+        liquidacion_hoy.caja = 0.0
+
+    # 💾 Guardar los cambios
+    db.session.commit()
+
+    flash(f"💰 Caja total de ${total_global:,.2f} liquidada correctamente.", "success")
+    return redirect(url_for("caja_total"))
+
 # ---------------------------
 # LIQUIDACIÓN (por día)
 # ---------------------------
 @app.route("/liquidacion", methods=["GET", "POST"])
 @login_required
 def liquidacion():
+    from datetime import date  # ✅ necesario para pasar al template
+
     if request.method == "POST":
         fecha_str = request.form.get("fecha")
         try:
@@ -432,31 +602,57 @@ def liquidacion():
         ventas_dia=ventas_detalle,
         total_caja=liq.caja,
         inventario_valor=inventario_valor,
-        caja_total_global=sum(l.caja or 0 for l in Liquidacion.query.all())
+        caja_total_global=sum(l.caja or 0 for l in Liquidacion.query.all()),
+        date=date  # ✅ esto evita el error 'date is undefined' en Jinja
     )
 
 # ---------------------------
 # PRODUCTOS
 # ---------------------------
-@app.route("/nuevo_producto", methods=["GET","POST"])
-@login_required
+@app.route("/nuevo_producto", methods=["GET", "POST"])
 def nuevo_producto():
-    if request.method == "POST":
-        codigo = request.form.get("codigo", "").strip() or ''.join(random.choices("0123456789", k=6))
-        nombre = request.form.get("nombre", "").strip()
-        stock_inicial = int(request.form.get("stock_inicial", 0))
-        valor_unitario = float(request.form.get("valor_unitario", 0))
-        interes = float(request.form.get("interes", 0))
-        orden = Producto.query.count() + 1
+    if request.method == "GET":
+        return render_template("nuevo_producto.html")
 
-        producto = Producto(codigo=codigo, nombre=nombre, orden=orden,
-                            stock_inicial=stock_inicial, unidades_restantes=stock_inicial,
-                            valor_unitario=valor_unitario, interes=interes, fecha=date.today())
+    try:
+        nombre = (request.form.get("nombre") or "").strip()
+        orden = _to_int(request.form.get("orden"))
+        valor_unitario = _to_float(request.form.get("valor_unitario"))
+        stock_inicial = _to_int(request.form.get("stock_inicial"))
+        interes = _to_float(request.form.get("interes"))
+
+        if not nombre:
+            flash("El nombre del producto es obligatorio.", "warning")
+            return redirect(url_for("nuevo_producto"))
+
+        if valor_unitario < 0 or stock_inicial < 0:
+            flash("El precio y el stock deben ser positivos.", "warning")
+            return redirect(url_for("nuevo_producto"))
+
+        # 👇 Usa tu helper existente, no una copia
+        codigo = generar_codigo_unico(Producto)
+
+        producto = Producto(
+            codigo=codigo,
+            orden=orden,
+            nombre=nombre,
+            valor_unitario=valor_unitario,
+            stock_inicial=stock_inicial,
+            unidades_restantes=stock_inicial,
+            interes=interes,
+            fecha=date.today(),
+        )
+
         db.session.add(producto)
         db.session.commit()
-        flash("Producto agregado correctamente", "success")
-        return redirect(url_for("index"))
-    return render_template("nuevo_producto.html")
+
+        flash(f"✅ Producto '{producto.nombre}' agregado correctamente.", "success")
+        return redirect(url_for("index") + f"#producto-{producto.id}")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"❌ Error al crear el producto: {e}", "danger")
+        return redirect(url_for("nuevo_producto"))
 
 @app.route("/eliminar_producto/<int:producto_id>", methods=["POST"])
 @login_required
@@ -467,39 +663,37 @@ def eliminar_producto(producto_id):
 # ---------------------------
 # CAJA TOTAL Y DETALLES
 # ---------------------------
-
-@app.route("/caja_total")
-@login_required
-def caja_total():
-    """Resumen total acumulado de la caja por día"""
-    registros = Liquidacion.query.order_by(Liquidacion.fecha.desc()).all()
-    total_global = sum(r.caja or 0 for r in registros)
-    return render_template("caja_total.html", registros=registros, total_global=total_global)
-
-
 @app.route("/detalle_caja/<fecha>")
 @login_required
 def detalle_dia(fecha):
-    """Desglose de ventas por producto en un día específico"""
+    """
+    Muestra el detalle completo de un día:
+    - Ventas agrupadas por producto
+    - Entradas, salidas y gastos
+    - Totales y resultado neto del día
+    """
+    from sqlalchemy import func
+
     try:
         fecha_dt = datetime.strptime(fecha, "%Y-%m-%d").date()
     except ValueError:
         flash("Fecha inválida.", "danger")
         return redirect(url_for("caja_total"))
 
-    start, end = day_range(fecha_dt)
+    start = datetime.combine(fecha_dt, time.min)
+    end = datetime.combine(fecha_dt + timedelta(days=1), time.min)
 
-    # Agrupar ventas por producto
+    # 🧾 Ventas agrupadas por producto
     resultados = (
         db.session.query(
             Producto.nombre.label("producto"),
-            db.func.sum(Venta.cantidad).label("vendidas"),
-            db.func.sum(Venta.ingreso).label("valor")
+            func.sum(Venta.cantidad).label("vendidas"),
+            func.sum(Venta.ingreso).label("valor")
         )
         .join(Producto, Producto.id == Venta.producto_id)
         .filter(Venta.fecha >= start, Venta.fecha < end)
         .group_by(Producto.nombre)
-        .order_by(db.func.sum(Venta.ingreso).desc())
+        .order_by(func.sum(Venta.ingreso).desc())
         .all()
     )
 
@@ -508,7 +702,36 @@ def detalle_dia(fecha):
         for r in resultados
     ]
 
-    return render_template("detalle_dia.html", fecha=fecha_dt, detalle=detalle)
+    # 💰 Entradas, salidas y gastos del día
+    total_entradas = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))\
+        .filter(MovimientoCaja.fecha >= start,
+                MovimientoCaja.fecha < end,
+                MovimientoCaja.tipo == "entrada").scalar() or 0.0
+
+    total_salidas = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))\
+        .filter(MovimientoCaja.fecha >= start,
+                MovimientoCaja.fecha < end,
+                MovimientoCaja.tipo == "salida").scalar() or 0.0
+
+    total_gastos = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))\
+        .filter(MovimientoCaja.fecha >= start,
+                MovimientoCaja.fecha < end,
+                MovimientoCaja.tipo == "gasto").scalar() or 0.0
+
+    total_ventas = sum(d["valor"] for d in detalle)
+    neto = total_ventas + total_entradas - total_salidas - total_gastos
+
+    return render_template(
+        "detalle_dia.html",
+        fecha=fecha_dt,
+        detalle=detalle,
+        total_ventas=total_ventas,
+        total_entradas=total_entradas,
+        total_salidas=total_salidas,
+        total_gastos=total_gastos,
+        neto=neto
+    )
+
 
 @app.route("/liquidar_total", methods=["POST"])
 @login_required
@@ -539,32 +762,35 @@ def liquidar_total():
 # ---------------------------
 # LIQUIDAR CAJA TOTAL
 # ---------------------------
-@app.route("/liquidar_caja_total", methods=["POST"])
+@app.route("/caja_total")
 @login_required
-def liquidar_caja_total():
-    """Cierra todas las cajas anteriores y deja solo la de hoy en 0"""
-    total_global = sum(l.caja or 0 for l in Liquidacion.query.all())
+def caja_total():
+    """
+    Muestra el resumen de todas las liquidaciones y calcula
+    la caja real disponible (restando salidas y gastos).
+    """
+    from sqlalchemy import func
 
-    if total_global <= 0:
-        flash("No hay caja acumulada para liquidar.", "warning")
-        return redirect(url_for("caja_total"))
+    # 🔹 Obtener todas las liquidaciones ordenadas por fecha
+    registros = Liquidacion.query.order_by(Liquidacion.fecha.asc()).all()
 
-    # Registrar salida en caja
-    mov = MovimientoCaja(
-        tipo="salida",
-        monto=total_global,
-        descripcion=f"Liquidación total de caja por ${total_global:,.2f}",
-        fecha=datetime.utcnow()
+    # 💰 Total histórico acumulado (todas las cajas sumadas)
+    total_global = db.session.query(func.coalesce(func.sum(Liquidacion.caja), 0)).scalar() or 0.0
+
+    # 💸 Total de salidas y gastos registrados en MovimientoCaja
+    total_salidas = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))\
+        .filter(MovimientoCaja.tipo.in_(["salida", "gasto"])).scalar() or 0.0
+
+    # 💼 Caja disponible real = total acumulado - salidas/gastos
+    caja_disponible = total_global - total_salidas
+
+    # 🧾 Renderizar la plantilla con todos los valores
+    return render_template(
+        "caja_total.html",
+        registros=registros,
+        total_global=total_global,
+        caja_disponible=caja_disponible
     )
-    db.session.add(mov)
-
-    # Dejar todas las cajas anteriores en 0
-    for l in Liquidacion.query.all():
-        l.caja = 0.0
-    db.session.commit()
-
-    flash(f"💰 Caja total de ${total_global:,.2f} liquidada correctamente.", "success")
-    return redirect(url_for("caja_total"))
 
 
 # ---------------------------

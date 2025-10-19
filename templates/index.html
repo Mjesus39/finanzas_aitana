@@ -24,12 +24,13 @@
       <th>Vender</th>
       <th>Unidades Vendidas (día)</th>
       <th>Valor Vendido (día)</th>
+      <th>💲 Editar Precio</th> <!-- Nueva columna -->
     </tr>
   </thead>
   <tbody>
     {% for p in productos %}
     {% set precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
-    <tr class="{{ estado_class(p) }} {% if p.id == resaltado %}highlight{% endif %}" data-producto-id="{{ p.id }}">
+    <tr id="producto-{{ p.id }}" class="{{ estado_class(p) }}">
       <!-- Orden -->
       <td style="width:100px;">
         <form action="{{ url_for('actualizar_orden_producto', producto_id=p.id) }}" method="post" class="d-flex actualizar-orden-form">
@@ -40,7 +41,7 @@
 
       <td>{{ p.codigo }}</td>
       <td>{{ p.nombre }}</td>
-      <td>{{ "%.2f"|format(precio_ganancia) }}</td>
+      <td class="precio-ganancia">{{ "%.2f"|format(precio_ganancia) }}</td>
       <td class="stock-actual">{{ p.unidades_restantes or 0 }}</td>
 
       <!-- Input de venta -->
@@ -55,12 +56,21 @@
 
       <td class="vendidas-dia fs-6">{{ p.vendidas_dia or 0 }}</td>
       <td class="valor-vendido-dia fs-6">{{ "%.2f"|format(p.valor_vendido_dia or 0) }}</td>
+
+      <!-- Nueva celda para editar precio -->
+      <td>
+        <form class="form-editar-precio d-flex justify-content-center" data-id="{{ p.id }}">
+          <input type="number" step="0.01" min="0" name="nuevo_precio" value="{{ p.valor_unitario }}"
+                 class="form-control text-end" style="width:100px;" required>
+          <button type="submit" class="btn btn-outline-success btn-sm ms-2">💾</button>
+        </form>
+      </td>
     </tr>
     {% endfor %}
   </tbody>
   <tfoot>
     <tr>
-      <th colspan="7" class="text-end">Total Vendido Hoy</th>
+      <th colspan="8" class="text-end">Total Vendido Hoy</th>
       <th id="total-vendido-hoy">{{ "%.2f"|format(total_vendido) }}</th>
     </tr>
   </tfoot>
@@ -70,41 +80,19 @@
 {% endif %}
 
 <style>
-/* 🟢 Fila resaltada al vender */
-.highlight {
-  background-color: #d4edda !important;
-  animation: fadeOut 2s ease 3s forwards;
-}
-
-/* 🎞️ Efecto de desvanecimiento */
-@keyframes fadeOut {
-  to { background-color: transparent; }
-}
-
-/* ⚠️ Bajo stock */
+.highlight { background-color: #c8f7c5 !important; transition: background-color 2s ease; }
 .table-danger td { background-color: #f8d7da !important; }
 .table-warning td { background-color: #fff3cd !important; }
-
-/* 🔍 Buscador */
 #buscar-producto { max-width: 400px; }
-
-/* 📱 Ajustes para móviles */
 @media (max-width: 768px) {
-  .cantidad-input {
-    width: 160px !important;
-    height: 60px !important;
-    font-size: 1.8rem !important;
-  }
-  .btn-success {
-    font-size: 1.8rem !important;
-    padding: 5px 20px !important;
-  }
+  .cantidad-input { width: 160px !important; height: 60px !important; font-size: 1.8rem !important; }
+  .btn-success { font-size: 1.8rem !important; padding: 5px 20px !important; }
 }
 </style>
 
 <script>
-// 🔍 Filtrar productos por nombre o código
 document.addEventListener("DOMContentLoaded", function() {
+  // 🔍 Filtro de productos
   const inputBuscar = document.getElementById("buscar-producto");
   const tabla = document.getElementById("tabla-productos");
   const filas = tabla ? tabla.getElementsByTagName("tr") : [];
@@ -119,61 +107,55 @@ document.addEventListener("DOMContentLoaded", function() {
       filas[i].style.display = (codigo.includes(filtro) || nombre.includes(filtro)) ? "" : "none";
     }
   });
-});
 
-// 🟢 Registrar venta sin recargar
-document.querySelectorAll(".form-vender").forEach(form => {
-  form.addEventListener("submit", async e => {
-    e.preventDefault();
-    const id = form.action.split("/").pop();
-    const cantidad = form.querySelector("input[name='cantidad']").value;
-    const fila = form.closest("tr");
-
-    if (!cantidad || cantidad <= 0) return alert("Ingrese una cantidad válida.");
-
-    try {
-      const res = await fetch(`/vender/${id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cantidad })
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        // Actualizar fila
-        const vendidasCelda = fila.querySelector(".vendidas-dia");
-        const valorCelda = fila.querySelector(".valor-vendido-dia");
-        const stockCelda = fila.querySelector(".stock-actual");
-
-        vendidasCelda.textContent = parseInt(vendidasCelda.textContent) + data.cantidad;
-        valorCelda.textContent = (parseFloat(valorCelda.textContent) + parseFloat(data.monto)).toFixed(2);
-        stockCelda.textContent = data.stock;
-
-        // Actualizar total vendido
-        const totalHoy = document.getElementById("total-vendido-hoy");
-        totalHoy.textContent = (parseFloat(totalHoy.textContent) + parseFloat(data.monto)).toFixed(2);
-
-        // Resaltar fila
-        fila.classList.add("highlight");
-        setTimeout(() => fila.classList.remove("highlight"), 2000);
-
-        // Limpiar campo
-        form.querySelector("input[name='cantidad']").value = "";
-
-        // Mostrar alerta elegante
-        const alertBox = document.createElement("div");
-        alertBox.className = "alert alert-success position-fixed bottom-0 end-0 m-3 shadow";
-        alertBox.textContent = `Venta registrada: ${data.nombre} (${data.cantidad} uds - $${data.monto.toFixed(2)})`;
-        document.body.appendChild(alertBox);
-        setTimeout(() => alertBox.remove(), 2500);
-      } else {
-        alert(data.error || "Error al registrar la venta.");
-      }
-    } catch (err) {
-      alert("Error de conexión con el servidor.");
+  // 🟢 Desplazarse automáticamente al producto recién agregado
+  if (window.location.hash) {
+    const id = window.location.hash.substring(1);
+    const fila = document.getElementById(id);
+    if (fila) {
+      fila.classList.add("highlight");
+      fila.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => fila.classList.remove("highlight"), 4000);
     }
+  }
+
+  // 💲 Editar precio sin recargar
+  document.querySelectorAll(".form-editar-precio").forEach(form => {
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      const id = form.dataset.id;
+      const nuevo_precio = form.querySelector("input[name='nuevo_precio']").value;
+      const fila = document.getElementById("producto-" + id);
+
+      try {
+        const res = await fetch(`/editar_precio/${id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nuevo_precio })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          // Actualizar visualmente el precio con ganancia
+          const precioGanancia = fila.querySelector(".precio-ganancia");
+          precioGanancia.textContent = data.precio_ganancia.toFixed(2);
+          fila.classList.add("highlight");
+          setTimeout(() => fila.classList.remove("highlight"), 3000);
+
+          // Mostrar confirmación
+          const alertBox = document.createElement("div");
+          alertBox.className = "alert alert-success position-fixed bottom-0 end-0 m-3 shadow";
+          alertBox.textContent = `Precio actualizado para ${data.nombre}`;
+          document.body.appendChild(alertBox);
+          setTimeout(() => alertBox.remove(), 2500);
+        } else {
+          alert(data.error || "Error al actualizar el precio.");
+        }
+      } catch (err) {
+        alert("Error de conexión con el servidor.");
+      }
+    });
   });
 });
 </script>
-
 {% endblock %}
