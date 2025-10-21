@@ -3,19 +3,36 @@
 
 {% block content %}
 <div class="container mt-4">
-  <h2 class="text-center mb-4">📊 Liquidación de Productos</h2>
 
-  <!-- 📅 Selector de fechas -->
-  <form method="POST" class="d-flex justify-content-center align-items-center gap-2 mb-4">
-    <label for="fecha_inicio" class="fw-bold">Desde:</label>
-    <input type="date" name="fecha_inicio" value="{{ fecha_inicio }}" class="form-control w-auto" required>
-    <label for="fecha_fin" class="fw-bold">Hasta:</label>
-    <input type="date" name="fecha_fin" value="{{ fecha_fin }}" class="form-control w-auto" required>
-    <button type="submit" class="btn btn-primary">🔍 Buscar</button>
-  </form>
+  <!-- 🔹 Encabezado -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <!-- 💸 Salida de Efectivo -->
+    <form action="{{ url_for('app_rutas.caja_salida') }}" method="POST" class="d-flex flex-wrap align-items-center gap-2 shadow-sm p-3 bg-light rounded">
+      <h5 class="mb-0 text-danger fw-bold">💸 Salida de Efectivo</h5>
+      <input type="number" name="monto" step="0.01" min="0" placeholder="Valor" class="form-control" required style="width:120px;">
+      <input type="text" name="descripcion" placeholder="Motivo" class="form-control" required style="width:200px;">
+      <button type="submit" class="btn btn-danger fw-bold">Aplicar</button>
+    </form>
 
+    <!-- 📅 Selector de fechas -->
+    <form method="POST" class="d-flex flex-wrap justify-content-center align-items-center gap-2">
+      <label for="fecha_inicio" class="fw-bold">Desde:</label>
+      <input type="date" name="fecha_inicio" value="{{ fecha_inicio }}" class="form-control w-auto" required>
+      <label for="fecha_fin" class="fw-bold">Hasta:</label>
+      <input type="date" name="fecha_fin" value="{{ fecha_fin }}" class="form-control w-auto" required>
+      <button type="submit" class="btn btn-primary fw-bold">🔍 Buscar</button>
+    </form>
+  </div>
+
+  <!-- 🕒 Hora actual -->
+  <p class="text-end text-muted mb-3">
+    🕒 Hora actual en Chile: {{ hora_actual()|hora_chile }}
+  </p>
+
+  <!-- 📅 Última Liquidación -->
   <p class="text-center fw-bold mb-3">
-    🗓️ Última liquidación: {{ ultima_fecha.strftime("%d-%m-%Y") if ultima_fecha else "N/A" }}
+    🗓️ Última liquidación: 
+    {{ ultima_fecha|hora_chile if ultima_fecha else "N/A" }}
   </p>
 
   {% if liquidaciones %}
@@ -24,37 +41,34 @@
       <thead class="table-dark">
         <tr>
           <th>Fecha</th>
-          <th>Ingresos</th>
-          <th>Caja anterior</th>
-          <th>Entr.Efec.</th>
-          <th>Ventas</th>
-          <th>Gastos</th>
-          <th>Salida efectivo</th>
-          <th>Caja</th>
-          <th>Día tasado</th>
-          <th>Suma Paquete</th>
+          <th>Venta del día anterior</th>
+          <th>Ventas del día</th>
+          <th>Salida de efectivo</th>
+          <th>Caja total</th>
+          <th>Inventario</th>
         </tr>
       </thead>
       <tbody>
         {% for d in liquidaciones %}
         <tr>
-          <td>{{ d.fecha.strftime("%d-%m-%Y") }}</td>
-          <td>${{ "%.2f"|format(d.ingresos or 0) }}</td>
+          <!-- ✅ Se usa filtro hora_chile para mantener consistencia horaria -->
+          <td>{{ d.fecha|hora_chile }}</td>
           <td>${{ "%.2f"|format(d.caja_anterior or 0) }}</td>
-          <td>${{ "%.2f"|format(d.entrada_efectivo or 0) }}</td>
           <td>
-            <a href="{{ url_for('app_rutas.detalle_ventas', fecha=d.fecha.strftime('%Y-%m-%d')) }}" class="fw-bold text-success text-decoration-none">
-              ${{ "%.2f"|format(d.ventas_dia or 0) }}
+            <a href="{{ url_for('app_rutas.detalle_ventas', fecha=d.fecha.strftime('%Y-%m-%d')) }}"
+               class="fw-bold text-success text-decoration-none">
+               ${{ "%.2f"|format(d.ventas_dia or 0) }}
             </a>
           </td>
-          <td>${{ "%.2f"|format(d.gastos or 0) }}</td>
           <td>
-            <a href="{{ url_for('app_rutas.detalle_salida', fecha=d.fecha.strftime('%Y-%m-%d')) }}" class="fw-bold text-danger text-decoration-none">
-              ${{ "%.2f"|format(d.salida_efectivo or 0) }}
+            <a href="{{ url_for('app_rutas.detalle_salida', fecha=d.fecha.strftime('%Y-%m-%d')) }}"
+               class="fw-bold text-danger text-decoration-none">
+               ${{ "%.2f"|format(d.salida_efectivo or 0) }}
             </a>
           </td>
-          <td class="fw-bold text-primary">${{ "%.2f"|format(d.caja or 0) }}</td>
-          <td>${{ "%.2f"|format(d.dia_tasado or 0) }}</td>
+          <td class="fw-bold text-primary">
+            ${{ "%.2f"|format(d.caja or 0) }}
+          </td>
           <td>${{ "%.2f"|format(d.suma_paquete or 0) }}</td>
         </tr>
         {% endfor %}
@@ -62,21 +76,20 @@
       <tfoot class="table-light fw-bold">
         <tr>
           <td>Total</td>
-          <td>${{ "%.2f"|format(total_ingresos or 0) }}</td>
           <td>${{ "%.2f"|format(caja_inicial or 0) }}</td>
-          <td>${{ "%.2f"|format(total_ingresos or 0) }}</td>
           <td>${{ "%.2f"|format(total_ventas or 0) }}</td>
-          <td>0.00</td>
           <td>${{ "%.2f"|format(total_salida or 0) }}</td>
           <td>${{ "%.2f"|format(caja_final or 0) }}</td>
-          <td>${{ "%.2f"|format(total_dia_tasado or 0) }}</td>
           <td>${{ "%.2f"|format(total_paquete or 0) }}</td>
         </tr>
       </tfoot>
     </table>
   </div>
+
   {% else %}
-  <div class="alert alert-info text-center">No se encontraron registros de liquidación.</div>
+  <div class="alert alert-info text-center">
+    📭 No se encontraron registros de liquidación.
+  </div>
   {% endif %}
 </div>
 {% endblock %}

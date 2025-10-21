@@ -1,11 +1,19 @@
+
 {% extends "base.html" %}
 {% block title %}📜 Historial de Inventario{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>📜 Historial de Inventario — Últimos 90 Días</h2>
-    <a href="{{ url_for('app_rutas.entrada_inventario') }}" class="btn btn-secondary">⬅ Volver</a>
+    <div>
+      <h2 class="fw-bold mb-0">📜 Historial de Inventario — Últimos 90 Días</h2>
+      <small class="text-muted">
+        Actualizado: {{ hora_actual()|hora_chile }}
+      </small>
+    </div>
+    <a href="{{ url_for('app_rutas.entrada_inventario') }}" class="btn btn-secondary fw-bold shadow-sm">
+      ⬅ Volver
+    </a>
   </div>
 
   {% if historial %}
@@ -13,7 +21,7 @@
     <table class="table table-bordered table-hover align-middle text-center">
       <thead class="table-dark">
         <tr>
-          <th>Fecha</th>
+          <th>Fecha y Hora</th>
           <th>Código</th>
           <th>Producto</th>
           <th>Cantidad Ingresada</th>
@@ -23,7 +31,8 @@
       <tbody>
         {% for h, p in historial %}
         <tr>
-          <td>{{ h.fecha.strftime("%d-%m-%Y %H:%M") }}</td>
+          <!-- ✅ Ajuste clave: hora local de Chile -->
+          <td>{{ h.fecha|hora_chile }}</td>
           <td>{{ p.codigo }}</td>
           <td class="fw-bold">{{ p.nombre }}</td>
           <td>{{ h.cantidad }}</td>

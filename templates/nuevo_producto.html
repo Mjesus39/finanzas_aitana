@@ -3,9 +3,16 @@
 
 {% block content %}
 <div class="container mt-4">
-  <div class="card shadow-sm border-0 p-4">
-    <h2 class="text-center mb-4">➕ Agregar Nuevo Producto</h2>
 
+  <!-- 🔹 Encabezado -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="fw-bold">➕ Agregar Nuevo Producto</h2>
+    <!-- ✅ Hora local Chile -->
+    <small class="text-muted">🕒 {{ hora_actual()|hora_chile }}</small>
+  </div>
+
+  <!-- 📦 Formulario -->
+  <div class="card shadow-sm border-0 p-4">
     <!-- Mensajes flash -->
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -21,37 +28,31 @@
     <!-- Formulario de producto -->
     <form method="POST" action="{{ url_for('app_rutas.nuevo_producto') }}" class="row g-3">
       
-      <!-- Orden -->
       <div class="col-md-4">
-        <label for="orden" class="form-label fw-bold">🧾 Orden</label>
-        <input type="number" class="form-control" id="orden" name="orden" min="1" required>
+        <label class="form-label fw-bold">🧾 Orden</label>
+        <input type="number" class="form-control" name="orden" min="1" required>
       </div>
 
-      <!-- Nombre -->
       <div class="col-md-8">
-        <label for="nombre" class="form-label fw-bold">📦 Nombre del Producto</label>
-        <input type="text" class="form-control" id="nombre" name="nombre" placeholder="Ej. Aceite 10W40" required>
+        <label class="form-label fw-bold">📦 Nombre del Producto</label>
+        <input type="text" class="form-control" name="nombre" placeholder="Ej: Aceite 10W40" required>
       </div>
 
-      <!-- Stock Inicial -->
       <div class="col-md-6">
-        <label for="stock_inicial" class="form-label fw-bold">📦 Stock Inicial</label>
-        <input type="number" class="form-control" id="stock_inicial" name="stock_inicial" min="0" required>
+        <label class="form-label fw-bold">📦 Stock Inicial</label>
+        <input type="number" class="form-control" name="stock_inicial" min="0" required>
       </div>
 
-      <!-- Valor Unitario -->
       <div class="col-md-6">
-        <label for="valor_unitario" class="form-label fw-bold">💲 Valor Unitario</label>
-        <input type="number" step="0.01" class="form-control" id="valor_unitario" name="valor_unitario" min="0" required>
+        <label class="form-label fw-bold">💲 Valor Unitario</label>
+        <input type="number" step="0.01" class="form-control" name="valor_unitario" min="0" required>
       </div>
 
-      <!-- Ganancia -->
       <div class="col-md-6">
-        <label for="interes" class="form-label fw-bold">💰 Ganancia (%)</label>
-        <input type="number" step="0.01" class="form-control" id="interes" name="interes" value="0" min="0" required>
+        <label class="form-label fw-bold">💰 Ganancia (%)</label>
+        <input type="number" step="0.01" class="form-control" name="interes" value="0" min="0" required>
       </div>
 
-      <!-- Botones -->
       <div class="col-12 text-center mt-4">
         <button type="submit" class="btn btn-primary px-5 fw-bold">💾 Guardar</button>
         <a href="{{ url_for('app_rutas.index') }}" class="btn btn-secondary ms-2">⬅ Volver</a>
@@ -59,24 +60,15 @@
     </form>
   </div>
 
-  <footer class="text-center mt-5 text-muted">
+  <!-- 👣 Pie -->
+  <footer class="text-center mt-5 text-muted small">
     <hr>
-    💻 Hecho con ❤️ por <strong>Manuel Herrera</strong>
+    💻 Hecho con ❤️ por <strong>Manuel Herrera</strong><br>
+    <span class="text-secondary">Sistema de Inventario Aitana — versión estable</span>
   </footer>
 </div>
+{% endblock %}
 
-<style>
-.card {
-  border-radius: 12px;
-}
-.btn-primary {
-  background-color: #0d6efd;
-  border: none;
-  transition: all 0.3s ease;
-}
-.btn-primary:hover {
-  background-color: #0b5ed7;
-  transform: scale(1.03);
-}
-</style>
+{% block scripts %}
+<!-- 🔧 Bloque reservado para JS específico -->
 {% endblock %}

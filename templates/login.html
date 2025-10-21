@@ -1,57 +1,58 @@
 {% extends "base.html" %}
-{% block title %}Iniciar sesión{% endblock %}
+{% block title %}🔐 Iniciar sesión{% endblock %}
+
 {% block content %}
+<div class="d-flex justify-content-center align-items-center vh-100 bg-light">
+  <div class="card shadow-lg p-4 border-0" style="width: 360px; border-radius: 15px;">
+    <h3 class="text-center mb-3 fw-bold text-dark">🔐 Iniciar sesión</h3>
 
-<div class="container mt-5">
-  <div class="row justify-content-center">
-    <div class="col-md-5 col-lg-4">
-      <div class="card shadow-sm p-4 border-0">
-        <h3 class="text-center mb-3">🔐 Iniciar sesión</h3>
-
-        <!-- Alertas de error o éxito -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            {% for category, message in messages %}
-              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-              </div>
-            {% endfor %}
-          {% endif %}
-        {% endwith %}
-
-        <form method="POST">
-          <div class="mb-3">
-            <label class="form-label fw-bold">Usuario</label>
-            <input type="text" name="usuario" class="form-control" required autofocus>
+    <!-- Alertas -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show small" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
           </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
 
-          <div class="mb-3">
-            <label class="form-label fw-bold">Contraseña</label>
-            <input type="password" name="contrasena" class="form-control" required>
-          </div>
-
-          <button type="submit" class="btn btn-dark w-100 fw-bold mt-2">Entrar</button>
-        </form>
+    <form method="POST">
+      <div class="mb-3">
+        <label class="form-label fw-semibold">👤 Usuario</label>
+        <input type="text" name="usuario" class="form-control shadow-sm" placeholder="Tu usuario" required autofocus>
       </div>
-    </div>
-  </div>
 
-  <footer class="text-center mt-5 text-muted">
-    <hr>
-    💻 Hecho con ❤️ por <strong>Manuel Herrera</strong>
-  </footer>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">🔑 Contraseña</label>
+        <input type="password" name="contrasena" class="form-control shadow-sm" placeholder="Tu contraseña" required>
+      </div>
+
+      <button type="submit" class="btn btn-dark w-100 fw-bold mt-3">Entrar</button>
+    </form>
+
+    <!-- ⏰ Hora actual en Chile -->
+    <p class="text-center text-muted small mt-3 mb-0">
+      🕒 {{ hora_actual()|hora_chile }}
+    </p>
+
+    <footer class="text-center mt-3 small text-muted">
+      💻 Hecho con ❤️ por <strong>Manuel Herrera</strong>
+    </footer>
+  </div>
 </div>
 
 <style>
+body {
+  background: linear-gradient(to bottom right, #f5f6fa, #e9ecef);
+}
 .card {
-  border-radius: 12px;
   transition: all 0.3s ease;
 }
 .card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  transform: translateY(-5px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
 }
 </style>
-
 {% endblock %}

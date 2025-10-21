@@ -1,65 +1,86 @@
-# app.py — versión corregida y estable
+# ======================================================
+# app.py — versión final y estable (hora local Chile 🇨🇱)
+# ======================================================
+
 import os
 from flask import Flask
 from flask_migrate import Migrate
-from extensions import db   # ✅ usamos la instancia global de extensions.py
+from extensions import db  # ✅ instancia global de SQLAlchemy
 
 # ---------------------------
-# Inicialización de la app
+# ⏰ Importar módulo de tiempo centralizado
 # ---------------------------
+from tiempo import hora_actual, to_hora_chile as hora_chile  # ✅ desde tiempo.py
+
+# ======================================================
+# 🚀 Inicialización de la app
+# ======================================================
 app = Flask(__name__)
 app.secret_key = os.environ.get("APP_SECRET", "clave_secreta_local_cámbiala")
 
-# ---------------------------
-# Configuración de la base de datos
-# ---------------------------
-DB_DEFAULT = "postgresql+psycopg2://almacen_aitana_332s_user:UH0aEwkoIZXef7j6k3aL8YC8wTHQGWYU@dpg-d38vaabuibrs73a4mmh0-a.oregon-postgres.render.com/almacen_aitana_332s"
+# ======================================================
+# 🕒 Registrar funciones globales para Jinja (uso en HTML)
+# ======================================================
+app.jinja_env.globals.update(hora_actual=hora_actual)
+app.jinja_env.filters["hora_chile"] = hora_chile
+
+# ======================================================
+# ⚙️ Configuración de la base de datos (Render PostgreSQL)
+# ======================================================
+DB_DEFAULT = (
+    "postgresql+psycopg2://almacen_aitana_332s_user:"
+    "UH0aEwkoIZXef7j6k3aL8YC8wTHQGWYU@"
+    "dpg-d38vaabuibrs73a4mmh0-a.oregon-postgres.render.com/"
+    "almacen_aitana_332s"
+)
+
 DATABASE_URL = os.getenv("DATABASE_URL", DB_DEFAULT)
 
+# 🔁 Compatibilidad: corregir prefijo en caso de que Render use "postgres://"
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# ---------------------------
-# Usuario del sistema
-# ---------------------------
+# ======================================================
+# 🔐 Usuario del sistema
+# ======================================================
 app.config["VALID_USER"] = "mjesus40"
 app.config["VALID_PASS"] = "198409"
 
-# ---------------------------
-# Inicializar extensiones
-# ---------------------------
-db.init_app(app)              # ✅ aquí se asocia la base de datos con la app
+# ======================================================
+# 🔧 Inicializar extensiones
+# ======================================================
+db.init_app(app)
 migrate = Migrate(app, db)
 
-# ---------------------------
-# Importar modelos y rutas
-# ---------------------------
-from modelos import *          # tus modelos (Producto, Venta, etc.)
-from rutas import app_rutas    # blueprint de todas las rutas
-
-# Registrar rutas
+# ======================================================
+# 📦 Modelos y rutas
+# ======================================================
+from modelos import *          # (Producto, Venta, etc.)
+from rutas import app_rutas    # Blueprint principal
 app.register_blueprint(app_rutas)
 
-# ✅ Asegurar que el blueprint herede la configuración
+# Asegurar que el blueprint herede la configuración
 app_rutas.config = app.config
 
-# ---------------------------
-# Errores e inicialización
-# ---------------------------
+# ======================================================
+# 🚫 Manejador de error 404
+# ======================================================
 @app.errorhandler(404)
 def page_not_found(e):
     from flask import render_template
     return render_template("404.html"), 404
 
-# Crear tablas si no existen
+# ======================================================
+# 🗃️ Crear tablas si no existen
+# ======================================================
 with app.app_context():
     db.create_all()
 
-# ---------------------------
-# Punto de entrada
-# ---------------------------
+# ======================================================
+# ▶️ Punto de entrada
+# ======================================================
 if __name__ == "__main__":
     app.run(debug=True)

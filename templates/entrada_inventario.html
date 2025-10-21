@@ -8,7 +8,6 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="fw-bold mb-0">📦 Control de Inventario</h2>
     <div class="d-flex gap-2">
-      <!-- ✅ Redirige al mismo formulario que el index -->
       <a href="{{ url_for('app_rutas.nuevo_producto') }}" class="btn btn-primary fw-bold">
         ➕ Nuevo Producto
       </a>
@@ -96,7 +95,7 @@
         <table class="table table-striped table-bordered align-middle text-center mb-0">
           <thead class="table-dark">
             <tr>
-              <th>Fecha</th>
+              <th>Fecha y Hora</th>
               <th>Código</th>
               <th>Producto</th>
               <th>Cantidad</th>
@@ -106,7 +105,8 @@
           <tbody>
             {% for h in historial %}
             <tr>
-              <td>{{ h.fecha.strftime("%d-%m-%Y") }}</td>
+              <!-- 🕒 Se muestra la hora local de Chile -->
+              <td>{{ h.fecha|hora_chile }}</td>
               <td>{{ h.producto.codigo }}</td>
               <td class="fw-bold">{{ h.producto.nombre }}</td>
               <td>{{ h.cantidad }}</td>

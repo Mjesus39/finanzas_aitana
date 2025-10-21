@@ -1,18 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Inventario{% endblock %}
+{% block title %}📦 Inventario{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-  <h2 class="mb-4 text-center">📦 Inventario de Productos</h2>
+  <h2 class="text-center mb-4">📦 Inventario de Productos</h2>
 
-  <!-- 🔹 Encabezado -->
+  <!-- 🔹 Barra superior -->
   <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-3 gap-2">
     <div class="d-flex flex-wrap gap-2">
       <a class="btn btn-primary" href="{{ url_for('app_rutas.nuevo_producto') }}">➕ Nuevo Producto</a>
       <a class="btn btn-secondary" href="{{ url_for('app_rutas.liquidacion') }}">📊 Ver Liquidación</a>
     </div>
-    <input type="text" id="buscar-producto" class="form-control mt-2 mt-md-0" placeholder="🔍 Buscar por código o nombre...">
   </div>
+
+  <!-- 🔍 Buscar -->
+  <input type="text" id="buscar-producto" class="form-control mb-3" placeholder="🔍 Buscar producto por código o nombre...">
 
   {% if productos %}
   <div class="table-responsive">
@@ -23,7 +25,7 @@
           <th>Código</th>
           <th>Nombre</th>
           <th>Precio con Ganancia</th>
-          <th>Stock Actual</th>
+          <th>Stock</th>
           <th>Vender</th>
           <th>Vendidas Hoy</th>
           <th>Valor Vendido</th>
@@ -38,27 +40,33 @@
           <td class="fw-bold col-nombre">{{ p.nombre }}</td>
           <td class="precio-ganancia">{{ "%.2f"|format(precio_ganancia) }}</td>
           <td class="stock-actual">{{ p.unidades_restantes or 0 }}</td>
-
-          <!-- Formulario de venta (AJAX) -->
           <td>
             <form class="form-vender d-flex justify-content-center" 
                   data-id="{{ p.id }}" 
                   data-action="{{ url_for('app_rutas.vender', producto_id=p.id) }}">
               <input type="number" step="1" min="1" max="{{ p.unidades_restantes }}" name="cantidad"
-                     placeholder="0" class="form-control text-end cantidad-input fs-5 fw-bold"
-                     style="width:110px; height:46px;" required>
+                     placeholder="0" class="form-control text-end cantidad-input fw-bold fs-5"
+                     style="width:100px; height:46px;" required>
               <button type="submit" class="btn btn-success ms-2 fs-5 btn-vender">💵</button>
             </form>
           </td>
-
-          <td class="vendidas-dia">{{ p.vendidas_dia or 0 }}</td>
+          <!-- 🔵 Celda clickeable para abrir el modal de detalles del día -->
+          <td class="vendidas-dia">
+            <button type="button"
+                    class="btn btn-link fw-bold text-decoration-none p-0 ver-detalles-venta"
+                    data-producto-id="{{ p.id }}"
+                    data-producto-nombre="{{ p.nombre }}"
+                    data-producto-codigo="{{ p.codigo }}">
+              {{ p.vendidas_dia or 0 }}
+            </button>
+          </td>
           <td class="valor-vendido-dia">{{ "%.2f"|format(p.valor_vendido_dia or 0) }}</td>
         </tr>
         {% endfor %}
       </tbody>
       <tfoot class="table-light">
         <tr>
-          <th colspan="7" class="text-end">Total Vendido Hoy:</th>
+          <th colspan="7" class="text-end">💰 Total Vendido Hoy:</th>
           <th id="total-vendido-hoy">{{ "%.2f"|format(total_vendido or 0) }}</th>
         </tr>
       </tfoot>
@@ -69,7 +77,7 @@
   {% endif %}
 </div>
 
-<!-- ✅ Toasts (éxito / error) -->
+<!-- ✅ Toasts -->
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
   <div id="toast-success" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
     <div class="d-flex">
@@ -84,6 +92,66 @@
     </div>
   </div>
 </div>
+
+<!-- 🎵 Sonido -->
+<audio id="sonido-ok" preload="auto">
+  <source src="https://assets.mixkit.co/sfx/download/mixkit-correct-answer-tone-2870.wav" type="audio/wav">
+</audio>
+
+<!-- 🪟 Modal elegante: Detalle de ventas del día del producto -->
+<div class="modal fade" id="modalDetallesVentas" tabindex="-1" aria-labelledby="modalDetallesVentasLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content shadow-lg border-0">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title" id="modalDetallesVentasLabel">📈 Ventas del día</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body bg-light">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <div class="fw-bold">Código: <span id="md-codigo" class="text-primary"></span></div>
+            <div class="fw-bold">Producto: <span id="md-nombre" class="text-dark"></span></div>
+          </div>
+          <div class="text-end">
+            <div class="small text-muted">Fecha (hora Chile)</div>
+            <div class="small fw-semibold" id="md-fecha-hoy"></div>
+          </div>
+        </div>
+
+        <div id="md-contenido">
+          <div class="table-responsive">
+            <table class="table table-striped table-hover align-middle text-center shadow-sm">
+              <thead class="table-dark">
+                <tr>
+                  <th>🕒 Hora</th>
+                  <th>🔢 Cantidad</th>
+                  <th>💰 Ingreso</th>
+                  <th>⚙️ Acción</th>
+                </tr>
+              </thead>
+              <tbody id="md-tbody">
+                <!-- filas dinámicas -->
+              </tbody>
+              <tfoot class="table-secondary fw-bold">
+                <tr>
+                  <td class="text-end" colspan="2">Total</td>
+                  <td id="md-total"></td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div id="md-vacio" class="alert alert-info text-center d-none">
+            📭 No hay ventas registradas hoy para este producto.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer bg-light">
+        <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -92,38 +160,32 @@
   const $ = (sel, ctx=document) => ctx.querySelector(sel);
   const $$ = (sel, ctx=document) => Array.from(ctx.querySelectorAll(sel));
 
-  // 🔍 Búsqueda en vivo (por código o nombre)
-  const inputBuscar = $("#buscar-producto");
-  if (inputBuscar) {
-    inputBuscar.addEventListener("keyup", () => {
-      const f = inputBuscar.value.toLowerCase();
-      $$("#tabla-productos tbody tr").forEach(tr => {
-        const codigo = tr.querySelector(".col-codigo")?.textContent.toLowerCase() || "";
-        const nombre = tr.querySelector(".col-nombre")?.textContent.toLowerCase() || "";
-        tr.style.display = (codigo.includes(f) || nombre.includes(f)) ? "" : "none";
-      });
-    });
-  }
-
-  // 🎵 Toasts
+  // 🎵 Toasts y sonido
   const toastOk = new bootstrap.Toast($("#toast-success"), { delay: 2000 });
   const toastErr = new bootstrap.Toast($("#toast-error"), { delay: 3000 });
   const okText = $("#toast-success-text"), errText = $("#toast-error-text");
+  const sonidoOk = $("#sonido-ok");
 
-  // 🧮 Helpers
-  const toNum = (txt) => parseFloat(String(txt).replaceAll(",", "").trim()) || 0;
-  const fmt2  = (n) => (Math.round(n * 100) / 100).toFixed(2);
+  // 🔍 Búsqueda
+  const inputBuscar = $("#buscar-producto");
+  inputBuscar?.addEventListener("keyup", () => {
+    const f = inputBuscar.value.toLowerCase();
+    $$("#tabla-productos tbody tr").forEach(tr => {
+      const codigo = tr.querySelector(".col-codigo")?.textContent.toLowerCase() || "";
+      const nombre = tr.querySelector(".col-nombre")?.textContent.toLowerCase() || "";
+      tr.style.display = (codigo.includes(f) || nombre.includes(f)) ? "" : "none";
+    });
+  });
 
-  // 🛒 Venta AJAX correcta (sin recargar)
+  // 🛒 Envío AJAX de venta
   $$(".form-vender").forEach(form => {
     form.addEventListener("submit", async (e) => {
-      e.preventDefault(); // ✅ evita el GET /?cantidad=1
+      e.preventDefault();
       const btn = form.querySelector(".btn-vender");
       const input = form.querySelector("input[name='cantidad']");
       const cantidad = parseInt(input.value);
       const id = form.dataset.id;
       const action = form.dataset.action;
-
       const fila = $("#producto-" + id);
       const stockEl = fila.querySelector(".stock-actual");
       const vendidasEl = fila.querySelector(".vendidas-dia");
@@ -131,13 +193,12 @@
       const totalEl = $("#total-vendido-hoy");
 
       if (!cantidad || cantidad <= 0) {
-        errText.textContent = "Cantidad inválida.";
+        errText.textContent = "⚠️ Cantidad inválida.";
         toastErr.show();
         return;
       }
 
       btn.disabled = true;
-
       try {
         const res = await fetch(action, {
           method: "POST",
@@ -147,31 +208,157 @@
 
         const data = await res.json();
         if (data.success) {
+          // ✅ Actualizar interfaz
           stockEl.textContent = data.stock;
-          vendidasEl.textContent = data.vendidas_dia;
-          valorEl.textContent = fmt2(data.valor_vendido_dia);
-          totalEl.textContent = fmt2(toNum(totalEl.textContent) + data.monto);
+          vendidasEl.querySelector("button").textContent = data.vendidas_dia;
+          valorEl.textContent = data.valor_vendido_dia.toFixed(2);
+          totalEl.textContent = (parseFloat(totalEl.textContent) + data.monto).toFixed(2);
 
-          okText.textContent = `✅ Venta registrada: ${data.nombre} (${cantidad})`;
+          input.classList.add("bg-success", "text-white");
+          setTimeout(() => input.classList.remove("bg-success", "text-white"), 1500);
+
+          okText.textContent = `✅ ${data.nombre} — ${cantidad} unidad(es) vendida(s).`;
           toastOk.show();
+          sonidoOk.play();
           input.value = "";
         } else {
-          errText.textContent = data.error || "Error al registrar venta.";
+          errText.textContent = data.error || "❌ Error al registrar la venta.";
           toastErr.show();
         }
       } catch (err) {
-        errText.textContent = "Error de conexión con el servidor.";
+        errText.textContent = "❌ Error de conexión con el servidor.";
         toastErr.show();
       } finally {
         btn.disabled = false;
       }
     });
   });
+
+  // 🪟 Abrir modal de detalles al tocar "Vendidas Hoy"
+  const modalEl = $("#modalDetallesVentas");
+  const modal = new bootstrap.Modal(modalEl);
+
+  async function cargarDetalles(productoId, codigo, nombre) {
+    // Encabezado del modal
+    $("#md-codigo").textContent = codigo;
+    $("#md-nombre").textContent = nombre;
+    $("#md-fecha-hoy").textContent = ""; // se llenará desde backend si lo envías, o queda vacío
+
+    const tbody = $("#md-tbody");
+    tbody.innerHTML = "";
+    $("#md-total").textContent = "0.00";
+    $("#md-vacio").classList.add("d-none");
+
+    try {
+      const res = await fetch(`/detalle_ventas_producto/${productoId}`);
+      const data = await res.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "No fue posible cargar los detalles.");
+      }
+
+      const ventas = data.ventas || [];
+      let total = 0;
+
+      if (ventas.length === 0) {
+        $("#md-vacio").classList.remove("d-none");
+      } else {
+        ventas.forEach(v => {
+          total += v.ingreso;
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td class="text-primary fw-semibold">${v.fecha_chile}</td>
+            <td>${v.cantidad}</td>
+            <td class="text-success fw-bold">$${v.ingreso.toFixed(2)}</td>
+            <td>
+              <button class="btn btn-sm btn-outline-danger eliminar-venta" data-venta-id="${v.id}" data-producto-id="${productoId}">
+                🗑 Eliminar
+              </button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      $("#md-total").textContent = `$${total.toFixed(2)}`;
+      modal.show();
+    } catch (e) {
+      console.error(e);
+      errText.textContent = "❌ No se pudieron cargar los detalles de ventas.";
+      toastErr.show();
+    }
+  }
+
+  // Click en botón de "vendidas hoy"
+  $$(".ver-detalles-venta").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const productoId = btn.dataset.productoId;
+      const codigo = btn.dataset.productoCodigo;
+      const nombre = btn.dataset.productoNombre;
+      cargarDetalles(productoId, codigo, nombre);
+    });
+  });
+
+  // 🗑 Eliminar venta desde el modal
+  $("#md-tbody")?.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".eliminar-venta");
+    if (!btn) return;
+
+    const ventaId = btn.dataset.ventaId;
+    const productoId = btn.dataset.productoId;
+    if (!ventaId) return;
+
+    btn.disabled = true;
+    try {
+      const res = await fetch(`/eliminar_venta/${ventaId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "No fue posible eliminar la venta.");
+      }
+
+      // ✅ Actualizar UI del modal (quitar fila y recomputar total)
+      const row = btn.closest("tr");
+      const ingreso = parseFloat(row.children[2].textContent.replace("$","")) || 0;
+      row.remove();
+
+      // Recalcular total del modal
+      let total = 0;
+      $$("#md-tbody tr").forEach(tr => {
+        const val = parseFloat(tr.children[2].textContent.replace("$","")) || 0;
+        total += val;
+      });
+      $("#md-total").textContent = `$${total.toFixed(2)}`;
+      if ($$("#md-tbody tr").length === 0) {
+        $("#md-vacio").classList.remove("d-none");
+      }
+
+      // ✅ Actualizar fila de producto en tabla principal
+      const fila = $("#producto-" + productoId);
+      fila.querySelector(".stock-actual").textContent = data.stock;
+      fila.querySelector(".vendidas-dia button").textContent = data.vendidas_dia;
+      fila.querySelector(".valor-vendido-dia").textContent = data.valor_vendido_dia.toFixed(2);
+
+      // ✅ Actualizar total vendido hoy (restar)
+      const totalEl = $("#total-vendido-hoy");
+      totalEl.textContent = (parseFloat(totalEl.textContent) - ingreso).toFixed(2);
+
+      okText.textContent = "✅ Venta eliminada y caja actualizada.";
+      toastOk.show();
+      sonidoOk.play();
+
+    } catch (err) {
+      console.error(err);
+      errText.textContent = "❌ No se pudo eliminar la venta.";
+      toastErr.show();
+    } finally {
+      btn.disabled = false;
+    }
+  });
 })();
 </script>
-
-<style>
-.table td, .table th { vertical-align: middle !important; }
-.table-danger td { background-color: #f8d7da !important; }
-</style>
 {% endblock %}

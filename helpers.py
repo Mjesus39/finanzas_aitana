@@ -1,21 +1,15 @@
+# ======================================================
+# helpers.py — versión final y sincronizada con tiempo.py 🇨🇱
+# ======================================================
 
-# helpers.py — versión unificada y funcional
-from datetime import datetime, date, time, timedelta
+from datetime import date, datetime, timedelta  # ✅ agregado timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import func
 from extensions import db
 from modelos import Producto, Venta, MovimientoCaja, Liquidacion, HistorialInventario
 
-
-# ======================================================
-# 📅 RANGOS DE FECHA
-# ======================================================
-def day_range(fecha: date):
-    """Devuelve el rango de inicio y fin de un día."""
-    start = datetime.combine(fecha, time.min)
-    end = start + timedelta(days=1)
-    return start, end
-
+# ⏰ Importar funciones de hora desde tiempo.py
+from tiempo import hora_actual, day_range
 
 # ======================================================
 # 💼 CAJA ANTERIOR
@@ -31,14 +25,10 @@ def obtener_caja_anterior(fecha: date) -> float:
 # 📦 INVENTARIO TOTAL (CON INTERÉS)
 # ======================================================
 def calcular_inventario_total() -> float:
-    """
-    Calcula el valor total del inventario actual con ganancia:
-    unidades_restantes * valor_unitario * (1 + interes/100)
-    Usa Decimal para precisión contable.
-    """
+    """Calcula el valor total del inventario actual con ganancia."""
     total_preciso = Decimal("0.00")
-
     productos = Producto.query.all()
+
     for p in productos:
         unidades = Decimal(str(p.unidades_restantes or 0))
         valor = Decimal(str(p.valor_unitario or 0))
@@ -46,22 +36,19 @@ def calcular_inventario_total() -> float:
         subtotal = unidades * valor * (Decimal("1") + interes / Decimal("100"))
         total_preciso += subtotal
 
-    total_final = total_preciso.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    return float(total_final)
+    return float(total_preciso.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 # ======================================================
 # 📈 ENTRADA DE INVENTARIO
 # ======================================================
 def calcular_entrada_inventario(fecha: date) -> float:
-    """Calcula el valor total de entradas de inventario registradas en el día."""
+    """Calcula el valor total de entradas de inventario registradas en el día (hora Chile)."""
     start, end = day_range(fecha)
-
     total = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
         .filter(MovimientoCaja.tipo == "entrada") \
         .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end) \
         .scalar() or 0.0
-
     return float(total)
 
 
@@ -70,17 +57,14 @@ def calcular_entrada_inventario(fecha: date) -> float:
 # ======================================================
 def caja_base_del_dia(fecha: date):
     """Devuelve la base de caja (ventas + entradas - salidas - gastos + caja anterior)."""
-    start = datetime.combine(fecha, time.min)
-    end = datetime.combine(fecha + timedelta(days=1), time.min)
-
+    start, end = day_range(fecha)
     caja_anterior = obtener_caja_anterior(fecha)
 
-    # 🟢 Total de ventas del día
+    # 🟢 Ventas del día
     ventas = (
         db.session.query(func.coalesce(func.sum(Venta.ingreso), 0))
         .filter(Venta.fecha >= start, Venta.fecha < end)
-        .scalar()
-        or 0.0
+        .scalar() or 0.0
     )
 
     # 💰 Entradas
@@ -88,8 +72,7 @@ def caja_base_del_dia(fecha: date):
         db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
         .filter(MovimientoCaja.tipo == "entrada")
         .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end)
-        .scalar()
-        or 0.0
+        .scalar() or 0.0
     )
 
     # 💸 Salidas + Gastos
@@ -97,20 +80,21 @@ def caja_base_del_dia(fecha: date):
         db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
         .filter(MovimientoCaja.tipo.in_(["salida", "gasto"]))
         .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end)
-        .scalar()
-        or 0.0
+        .scalar() or 0.0
     )
 
     # 🧮 Caja total
     return float(caja_anterior + ventas + entradas - salidas)
-from datetime import datetime, date
 
+
+# ======================================================
+# 🔁 RESETEAR VENTAS DIARIAS
+# ======================================================
 def resetear_ventas_dia():
     """Reinicia las ventas diarias si cambió el día."""
-    hoy = date.today()
+    hoy = hora_actual().date()  # 👈 ajustado a hora Chile
     for producto in Producto.query.all():
-        # Si la fecha del producto es de otro día, se resetea
-        if producto.fecha != hoy:
+        if getattr(producto, "fecha", None) != hoy:
             producto.vendidas_dia = 0
             producto.valor_vendido_dia = 0
             producto.fecha = hoy
@@ -118,7 +102,7 @@ def resetear_ventas_dia():
 
 
 # ======================================================
-# 🧮 FUNCIONES DE APOYO (PARA OTROS MÓDULOS)
+# 🧮 FUNCIONES DE APOYO
 # ======================================================
 def _to_float(value):
     """Convierte un valor a float de forma segura (acepta coma o punto)."""
@@ -132,3 +116,15 @@ def _to_int(value):
     if value is None or str(value).strip() == "":
         return 0
     return int(float(str(value).strip().replace(",", ".")))
+
+# ======================================================
+# 🎨 FUNCIÓN VISUAL PARA CLASES CSS DE PRODUCTOS
+# ======================================================
+def estado_class(producto):
+    """Devuelve una clase CSS según el stock restante."""
+    if producto.unidades_restantes <= 0:
+        return "table-danger"  # 🔴 Sin stock
+    elif producto.unidades_restantes <= 5:
+        return "table-warning"  # 🟡 Pocas unidades
+    else:
+        return "table-success"  # 🟢 Disponible

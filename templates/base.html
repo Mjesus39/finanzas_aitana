@@ -19,7 +19,7 @@
     }
 
     nav.navbar {
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
 
     footer {
@@ -43,7 +43,7 @@
 </head>
 <body>
 
-  <!-- 🧭 Navbar -->
+  <!-- 🧭 Navbar principal -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
       <a class="navbar-brand fw-bold" href="{{ url_for('app_rutas.index') }}">🏠 Aitana System</a>
@@ -53,29 +53,17 @@
 
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto">
-
-          <!-- ✅ Inventario -->
           <li class="nav-item">
-            <a href="{{ url_for('app_rutas.entrada_inventario') }}"
-               class="nav-link {% if request.endpoint == 'app_rutas.entrada_inventario' %}active{% endif %}">
-               📦 Inventario
-            </a>
+            <a href="{{ url_for('app_rutas.entrada_inventario') }}" 
+               class="nav-link {% if request.endpoint == 'app_rutas.entrada_inventario' %}active{% endif %}">📦 Inventario</a>
           </li>
-
-          <!-- ✅ Liquidación -->
           <li class="nav-item">
-            <a href="{{ url_for('app_rutas.liquidacion') }}"
-               class="nav-link {% if request.endpoint == 'app_rutas.liquidacion' %}active{% endif %}">
-               📊 Liquidación
-            </a>
+            <a href="{{ url_for('app_rutas.liquidacion') }}" 
+               class="nav-link {% if request.endpoint == 'app_rutas.liquidacion' %}active{% endif %}">📊 Liquidación</a>
           </li>
-
-          <!-- ✅ Dashboard -->
           <li class="nav-item">
-            <a href="{{ url_for('app_rutas.dashboard') }}"
-               class="nav-link {% if request.endpoint == 'app_rutas.dashboard' %}active{% endif %}">
-               📈 Dashboard
-            </a>
+            <a href="{{ url_for('app_rutas.dashboard') }}" 
+               class="nav-link {% if request.endpoint == 'app_rutas.dashboard' %}active{% endif %}">📈 Dashboard</a>
           </li>
 
           {% if session.get('usuario') %}
@@ -89,10 +77,8 @@
           </li>
           {% else %}
           <li class="nav-item">
-            <a href="{{ url_for('app_rutas.login') }}"
-               class="nav-link {% if request.endpoint == 'app_rutas.login' %}active{% endif %}">
-               🔐 Iniciar sesión
-            </a>
+            <a href="{{ url_for('app_rutas.login') }}" 
+               class="nav-link {% if request.endpoint == 'app_rutas.login' %}active{% endif %}">🔐 Iniciar sesión</a>
           </li>
           {% endif %}
         </ul>
@@ -114,16 +100,17 @@
         </div>
       {% endif %}
     {% endwith %}
-
     {% block content %}{% endblock %}
   </main>
 
   <!-- ⚙️ Footer -->
   <footer>
-    
+    <div class="text-center">
+      <small>© 2025 Aitana System</small>
+    </div>
   </footer>
 
-  <!-- 🧩 Bloque para scripts -->
+  <!-- Bloque de scripts específicos de cada página -->
   {% block scripts %}{% endblock %}
 </body>
 </html>

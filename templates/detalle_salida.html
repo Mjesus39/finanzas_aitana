@@ -1,42 +1,68 @@
+
 {% extends "base.html" %}
-{% block title %}💸 Salidas de Efectivo — {{ fecha.strftime("%d/%m/%Y") }}{% endblock %}
+{% block title %}💸 Detalle de Salidas de Efectivo{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2>💸 Salidas de Efectivo — {{ fecha.strftime("%d/%m/%Y") }}</h2>
-        <a href="{{ url_for('app_rutas.lista_liquidaciones') }}" class="btn btn-outline-dark">⬅ Volver</a>
-    </div>
+  <h3 class="text-center mb-4 text-danger">💸 Salidas de Efectivo — {{ fecha|hora_chile }}</h3>
 
-    {% if salidas %}
-    <table class="table table-bordered table-hover align-middle text-center">
-        <thead class="table-dark">
-            <tr>
-                <th>🕒 Hora</th>
-                <th>💬 Descripción</th>
-                <th>💰 Monto</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for s in salidas %}
-            <tr>
-                <td>{{ s.fecha.strftime("%H:%M:%S") }}</td>
-                <td>{{ s.descripcion or "Sin descripción" }}</td>
-                <td class="fw-bold text-danger">${{ "%.2f"|format(s.monto) }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-        <tfoot class="table-secondary fw-bold">
-            <tr>
-                <td colspan="2">Total del Día</td>
-                <td>${{ "%.2f"|format(total_salidas) }}</td>
-            </tr>
-        </tfoot>
+  {% if salidas %}
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover text-center align-middle shadow-sm">
+      <thead class="table-dark">
+        <tr>
+          <th>🕒 Hora</th>
+          <th>💬 Motivo</th>
+          <th>💰 Monto</th>
+          <th>🗑️ Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in salidas %}
+        <tr>
+          <td>{{ s.fecha|hora_chile }}</td>
+          <td>{{ s.descripcion }}</td>
+          <td class="fw-bold text-danger">${{ "%.2f"|format(s.monto) }}</td>
+          <td>
+            <form action="{{ url_for('app_rutas.eliminar_salida', salida_id=s.id) }}" 
+                  method="POST" 
+                  class="d-inline eliminar-form">
+              <button type="submit" class="btn btn-outline-danger btn-sm">🗑️ Eliminar</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
     </table>
-    {% else %}
-    <div class="alert alert-warning text-center">
-        ⚠️ No hubo salidas de efectivo registradas en esta fecha.
-    </div>
-    {% endif %}
+  </div>
+  {% else %}
+  <div class="alert alert-info text-center">
+    📭 No se encontraron salidas registradas para esta fecha.
+  </div>
+  {% endif %}
 </div>
+
+<!-- SweetAlert para confirmación -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+document.querySelectorAll('.eliminar-form').forEach(form => {
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    Swal.fire({
+      title: '¿Eliminar salida?',
+      text: 'Esta acción no se puede deshacer.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        form.submit();
+      }
+    });
+  });
+});
+</script>
 {% endblock %}

@@ -1,66 +1,70 @@
 {% extends "base.html" %}
-{% block title %}📊 Panel de Control{% endblock %}
+{% block title %}📊 Panel de Control — Productos{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-  <h2 class="mb-4 text-center">📊 Panel de Control del Negocio</h2>
+<div class="container mt-4 mb-5">
+  <h2 class="mb-4 text-center fw-bold text-primary">📊 Panel de Control — Inventario y Ventas</h2>
 
   <div class="row g-4">
-    <!-- Total Clientes -->
-    <div class="col-md-4 col-lg-3">
-      <div class="card shadow-sm border-0 text-center p-3 bg-light">
-        <h6 class="text-secondary">👥 Total Clientes</h6>
-        <h2 class="fw-bold text-dark">{{ total_clientes }}</h2>
-      </div>
-    </div>
-
-    <!-- Total Abonos -->
-    <div class="col-md-4 col-lg-3">
-      <div class="card shadow-sm border-0 text-center p-3 bg-success text-white">
-        <h6>💰 Total Abonos</h6>
-        <h2 class="fw-bold">{{ "%.2f"|format(total_abonos) }}</h2>
-      </div>
-    </div>
-
-    <!-- Total Préstamos -->
-    <div class="col-md-4 col-lg-3">
-      <div class="card shadow-sm border-0 text-center p-3 bg-warning text-dark">
-        <h6>🏦 Total Préstamos</h6>
-        <h2 class="fw-bold">{{ "%.2f"|format(total_prestamos) }}</h2>
-      </div>
-    </div>
-
-    <!-- Total Productos -->
+    <!-- Total de Productos -->
     <div class="col-md-4 col-lg-3">
       <div class="card shadow-sm border-0 text-center p-3 bg-info text-white">
-        <h6>📦 Total Productos</h6>
+        <h6>📦 Total de Productos</h6>
         <h2 class="fw-bold">{{ total_productos }}</h2>
       </div>
     </div>
 
-    <!-- Total Unidades Vendidas -->
+    <!-- Total de Unidades Vendidas -->
     <div class="col-md-4 col-lg-3">
       <div class="card shadow-sm border-0 text-center p-3 bg-primary text-white">
-        <h6>🛒 Total Unidades Vendidas</h6>
+        <h6>🛒 Total de Unidades Vendidas</h6>
         <h2 class="fw-bold">{{ total_unidades_vendidas }}</h2>
       </div>
     </div>
 
     <!-- Valor Total Vendido -->
     <div class="col-md-4 col-lg-3">
-      <div class="card shadow-sm border-0 text-center p-3 bg-danger text-white">
-        <h6>💵 Valor Total Vendido</h6>
-        <h2 class="fw-bold">{{ "%.2f"|format(valor_total_vendido) }}</h2>
+      <div class="card shadow-sm border-0 text-center p-3 bg-success text-white">
+        <h6>💰 Valor Total Vendido</h6>
+        <h2 class="fw-bold">${{ "%.2f"|format(valor_total_vendido) }}</h2>
+      </div>
+    </div>
+
+    <!-- Total de Movimientos de Caja -->
+    <div class="col-md-4 col-lg-3">
+      <div class="card shadow-sm border-0 text-center p-3 bg-dark text-white">
+        <h6>💼 Movimientos de Caja</h6>
+        <h2 class="fw-bold">{{ total_movimientos }}</h2>
       </div>
     </div>
   </div>
 
-  <!-- Footer -->
+  <!-- 📈 Sección de resumen -->
+  <div class="card mt-5 shadow-lg border-0">
+    <div class="card-header bg-dark text-white">
+      <h5 class="mb-0">📈 Resumen General del Negocio</h5>
+    </div>
+    <div class="card-body bg-light">
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item d-flex justify-content-between">
+          <span>Inventario actual valorizado:</span>
+          <strong>${{ "{:,.2f}".format(calcular_inventario_total() or 0) }}</strong>
+        </li>
+        <li class="list-group-item d-flex justify-content-between">
+          <span>Última actualización del sistema:</span>
+          <!-- ✅ Mostrar hora local de Chile correctamente -->
+          <strong>{{ hora_chile() }}</strong>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 👨‍💻 Pie -->
   <div class="text-center mt-5">
     <hr>
     <p class="text-muted">
-      💻 Hecho con ❤️ por <strong>Manuel Herrera</strong><br>
-      <small>Sistema de Gestión e Inventario — versión estable</small>
+      💻 Desarrollado con ❤️ por <strong>Manuel Herrera</strong><br>
+      <small>Sistema de Inventario y Ventas — versión estable</small>
     </p>
   </div>
 </div>

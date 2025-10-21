@@ -1,78 +1,92 @@
 {% extends "base.html" %}
-{% block title %}Editar Cliente{% endblock %}
+{% block title %}📊 Unidades Vendidas{% endblock %}
+
 {% block content %}
-<h2>Editar Cliente</h2>
+<div class="container mt-4">
 
-<form action="{{ url_for('editar_cliente', cliente_id=cliente.id) }}" method="post" class="row g-3">
-
-  <!-- Orden -->
-  <div class="col-md-2">
-    <label for="orden" class="form-label">Orden</label>
-    <input type="number" class="form-control" id="orden" name="orden" value="{{ cliente.orden }}" required>
+  <!-- 🔹 Encabezado -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="fw-bold">📊 Unidades Vendidas</h2>
+    <!-- ⏰ Hora local Chile -->
+    <small class="text-muted">🕒 {{ hora_actual()|hora_chile }}</small>
   </div>
 
-  <!-- Nombre -->
-  <div class="col-md-4">
-    <label for="nombre" class="form-label">Nombre</label>
-    <input type="text" class="form-control" id="nombre" name="nombre" value="{{ cliente.nombre }}" required>
+  <!-- 🧾 Formulario -->
+  <div class="card shadow-sm border-0 p-4">
+    <form action="{{ url_for('app_rutas.editar_unidades_vendidas', producto_id=producto.id) }}" method="post" class="row g-3">
+
+      <!-- Orden -->
+      <div class="col-md-2">
+        <label class="form-label fw-bold">Orden</label>
+        <input type="number" class="form-control" name="orden" value="{{ producto.orden }}" required>
+      </div>
+
+      <!-- Nombre del producto -->
+      <div class="col-md-4">
+        <label class="form-label fw-bold">Producto</label>
+        <input type="text" class="form-control" value="{{ producto.nombre }}" readonly>
+      </div>
+
+      <!-- Stock actual -->
+      <div class="col-md-3">
+        <label class="form-label fw-bold">Stock Actual</label>
+        <input type="number" class="form-control" value="{{ producto.unidades_restantes }}" readonly>
+      </div>
+
+      <!-- Vendidas hoy -->
+      <div class="col-md-3">
+        <label class="form-label fw-bold">Vendidas Hoy</label>
+        <input type="number" step="1" min="0" class="form-control" id="unidades_vendidas"
+               name="unidades_vendidas" value="{{ producto.vendidas_dia }}" required>
+      </div>
+
+      <!-- Valor unitario -->
+      <div class="col-md-4">
+        <label class="form-label fw-bold">💲 Valor Unitario</label>
+        <input type="number" step="0.01" class="form-control" id="valor_unitario"
+               name="valor_unitario" value="{{ producto.valor_unitario }}" required>
+      </div>
+
+      <!-- Valor total vendido -->
+      <div class="col-md-4">
+        <label class="form-label fw-bold">💰 Valor Total Vendido</label>
+        <input type="number" step="0.01" class="form-control" id="valor_total"
+               name="valor_total" value="{{ producto.valor_vendido_dia }}" readonly>
+      </div>
+
+      <!-- Botones -->
+      <div class="col-12 text-center mt-3">
+        <button type="submit" class="btn btn-primary fw-bold px-4">💾 Guardar Cambios</button>
+        <a href="{{ url_for('app_rutas.index') }}" class="btn btn-secondary ms-2 px-4">⬅ Volver</a>
+      </div>
+    </form>
   </div>
 
-  <!-- Dirección -->
-  <div class="col-md-6">
-    <label for="direccion" class="form-label">Dirección</label>
-    <input type="text" class="form-control" id="direccion" name="direccion" value="{{ cliente.direccion }}">
-  </div>
+  <!-- 👣 Pie -->
+  <footer class="text-center mt-5 text-muted small">
+    <hr>
+    💻 Hecho con ❤️ por <strong>Manuel Herrera</strong><br>
+    <span class="text-secondary">Sistema Aitana — versión estable</span>
+  </footer>
+</div>
+{% endblock %}
 
-  <!-- Unidades iniciales -->
-  <div class="col-md-4">
-    <label for="unidades_iniciales" class="form-label">Unidades Iniciales</label>
-    <input type="number" step="1" class="form-control" id="unidades_iniciales" name="unidades_iniciales"
-           value="{{ cliente.unidades_iniciales }}" required>
-  </div>
-
-  <!-- Unidades vendidas -->
-  <div class="col-md-4">
-    <label for="unidades_vendidas" class="form-label">Unidades Vendidas</label>
-    <input type="number" step="1" min="0" class="form-control" id="unidades_vendidas" name="unidades_vendidas"
-           value="{{ cliente.unidades_vendidas }}" required>
-  </div>
-
-  <!-- Valor unitario -->
-  <div class="col-md-4">
-    <label for="valor_unitario" class="form-label">Valor Unitario</label>
-    <input type="number" step="0.01" class="form-control" id="valor_unitario" name="valor_unitario"
-           value="{{ cliente.valor_unitario }}" required>
-  </div>
-
-  <!-- Valor total de las unidades vendidas -->
-  <div class="col-md-4">
-    <label for="valor_total" class="form-label">Valor Total Vendido</label>
-    <input type="number" step="0.01" class="form-control" id="valor_total" name="valor_total"
-           value="{{ cliente.unidades_vendidas * cliente.valor_unitario }}" readonly>
-  </div>
-
-  <div class="col-12">
-    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
-    <a href="{{ url_for('index') }}" class="btn btn-secondary">Volver</a>
-  </div>
-</form>
-
-<!-- Script para actualizar automáticamente valor total cuando se cambian unidades vendidas -->
+{% block scripts %}
+<!-- 🧮 Script para recalcular automáticamente el valor total -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-    const unidadesInput = document.getElementById("unidades_vendidas");
-    const valorUnitarioInput = document.getElementById("valor_unitario");
-    const valorTotalInput = document.getElementById("valor_total");
+  const unidadesInput = document.getElementById("unidades_vendidas");
+  const valorUnitarioInput = document.getElementById("valor_unitario");
+  const valorTotalInput = document.getElementById("valor_total");
 
-    function actualizarValorTotal() {
-        const unidades = parseFloat(unidadesInput.value) || 0;
-        const valorUnitario = parseFloat(valorUnitarioInput.value) || 0;
-        valorTotalInput.value = (unidades * valorUnitario).toFixed(2);
-    }
+  function actualizarValorTotal() {
+    const unidades = parseFloat(unidadesInput.value) || 0;
+    const valorUnitario = parseFloat(valorUnitarioInput.value) || 0;
+    valorTotalInput.value = (unidades * valorUnitario).toFixed(2);
+  }
 
-    unidadesInput.addEventListener("input", actualizarValorTotal);
-    valorUnitarioInput.addEventListener("input", actualizarValorTotal);
+  unidadesInput.addEventListener("input", actualizarValorTotal);
+  valorUnitarioInput.addEventListener("input", actualizarValorTotal);
 });
 </script>
-
 {% endblock %}
