@@ -171,6 +171,9 @@ def dashboard():
     total_movimientos = MovimientoCaja.query.count()
     total_abonos = total_prestamos = 0.0
 
+    # ✅ Calculamos el inventario total desde helpers
+    inventario_total = calcular_inventario_total() or 0
+
     return render_template(
         "dashboard.html",
         total_productos=total_productos,
@@ -178,7 +181,8 @@ def dashboard():
         valor_total_vendido=valor_total_vendido,
         total_movimientos=total_movimientos,
         total_abonos=total_abonos,
-        total_prestamos=total_prestamos
+        total_prestamos=total_prestamos,
+        inventario_total=inventario_total  # ✅ se pasa como valor
     )
 
 # ======================================================

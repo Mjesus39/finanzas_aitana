@@ -48,7 +48,8 @@
       <ul class="list-group list-group-flush">
         <li class="list-group-item d-flex justify-content-between">
           <span>Inventario actual valorizado:</span>
-          <strong>${{ "{:,.2f}".format(calcular_inventario_total() or 0) }}</strong>
+          <!-- ✅ ahora usamos la variable pasada desde Flask -->
+          <strong>${{ "{:,.2f}".format(inventario_total) }}</strong>
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span>Última actualización del sistema:</span>

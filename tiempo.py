@@ -1,63 +1,51 @@
 # ======================================================
-# tiempo.py — control horario centralizado (hora real Chile 🇨🇱)
+# tiempo.py — versión estable Render + Local (Chile 🇨🇱)
 # ======================================================
 
 from datetime import datetime, time, timedelta, date
-import pytz
 from zoneinfo import ZoneInfo
 
-# Zona horaria de Chile
-CHILE_TZ = pytz.timezone("America/Santiago")
+# Zona horaria oficial de Chile continental
+CHILE_TZ = ZoneInfo("America/Santiago")
 
 # ======================================================
 # 🕒 Hora actual
 # ======================================================
 def hora_actual():
     """
-    Devuelve la hora actual en la zona horaria de Chile,
-    sin información de zona horaria (naive) para evitar
-    que SQLAlchemy la convierta a UTC al guardar.
+    Devuelve la hora actual en la zona horaria de Chile (correcta en Render).
     """
-    return datetime.now(CHILE_TZ).replace(tzinfo=None)
+    return datetime.now(CHILE_TZ)
 
 # ======================================================
-# 📅 Día en hora local
+# 📅 Fecha local
 # ======================================================
 def local_date():
     """Devuelve solo la fecha (YYYY-MM-DD) en hora chilena."""
     return hora_actual().date()
 
 # ======================================================
-# 📆 Rango del día (inicio y fin)
+# 📆 Rango de día
 # ======================================================
 def day_range(fecha: date):
-    """Devuelve el rango de inicio y fin del día, en hora de Chile."""
-    start = datetime.combine(fecha, time.min)
+    """Devuelve el rango de inicio y fin del día en hora de Chile."""
+    start = datetime.combine(fecha, time.min, tzinfo=CHILE_TZ)
     end = start + timedelta(days=1)
     return start, end
 
 # ======================================================
-# 🕓 Conversión segura para mostrar en pantallas
+# 🕓 Conversión segura para mostrar
 # ======================================================
 def to_hora_chile(value):
-    """Convierte fechas o datetimes a formato chileno legible (corrige desfase)."""
+    """Convierte datetimes a hora local chilena legible."""
     if not value:
         return ""
 
-    # Si es un objeto date (sin hora)
-    if isinstance(value, date) and not hasattr(value, "hour"):
-        return value.strftime("%d/%m/%Y")
-
     try:
-        zona_chile = ZoneInfo("America/Santiago")
-
-        # Si no tiene zona horaria, asumimos que ya está en hora local
         if value.tzinfo is None:
-            local_value = value
-        else:
-            local_value = value.astimezone(zona_chile)
-
+            # Asumimos que viene en UTC si no tiene zona
+            value = value.replace(tzinfo=ZoneInfo("UTC"))
+        local_value = value.astimezone(CHILE_TZ)
         return local_value.strftime("%d/%m/%Y %H:%M:%S")
-
     except Exception:
         return str(value)
