@@ -21,8 +21,10 @@ app.secret_key = os.environ.get("APP_SECRET", "clave_secreta_local_cámbiala")
 # ======================================================
 # 🕒 Registrar funciones globales para Jinja (uso en HTML)
 # ======================================================
+# Permite usar hora_actual() y hora_chile() o el filtro |hora_chile en los templates
 app.jinja_env.globals.update(hora_actual=hora_actual)
 app.jinja_env.filters["hora_chile"] = hora_chile
+app.jinja_env.globals.update(hora_chile=hora_chile)  # ✅ añadido: define la función directa
 
 # ======================================================
 # ⚙️ Configuración de la base de datos (Render PostgreSQL)

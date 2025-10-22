@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 {% block title %}📊 Panel de Control — Productos{% endblock %}
 
@@ -48,13 +49,12 @@
       <ul class="list-group list-group-flush">
         <li class="list-group-item d-flex justify-content-between">
           <span>Inventario actual valorizado:</span>
-          <!-- ✅ ahora usamos la variable pasada desde Flask -->
           <strong>${{ "{:,.2f}".format(inventario_total) }}</strong>
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span>Última actualización del sistema:</span>
           <!-- ✅ Mostrar hora local de Chile correctamente -->
-          <strong>{{ hora_chile() }}</strong>
+          <strong>{{ hora_actual()|hora_chile }}</strong>
         </li>
       </ul>
     </div>
