@@ -126,7 +126,7 @@
                   <th>🕒 Hora</th>
                   <th>🔢 Cantidad</th>
                   <th>💰 Ingreso</th>
-                  <th>⚙️ Acción</th>
+                  <th⚙️ Acción</th>
                 </tr>
               </thead>
               <tbody id="md-tbody">
@@ -234,16 +234,14 @@
     });
   });
 
-  // 🪟 Abrir modal de detalles al tocar "Vendidas Hoy"
+  // 🪟 Abrir modal de detalles
   const modalEl = $("#modalDetallesVentas");
   const modal = new bootstrap.Modal(modalEl);
 
   async function cargarDetalles(productoId, codigo, nombre) {
-    // Encabezado del modal
     $("#md-codigo").textContent = codigo;
     $("#md-nombre").textContent = nombre;
-    $("#md-fecha-hoy").textContent = ""; // se llenará desde backend si lo envías, o queda vacío
-
+    $("#md-fecha-hoy").textContent = "";
     const tbody = $("#md-tbody");
     tbody.innerHTML = "";
     $("#md-total").textContent = "0.00";
@@ -253,16 +251,12 @@
       const res = await fetch(`/detalle_ventas_producto/${productoId}`);
       const data = await res.json();
 
-      if (!data.success) {
-        throw new Error(data.error || "No fue posible cargar los detalles.");
-      }
-
+      if (!data.success) throw new Error(data.error || "No fue posible cargar los detalles.");
       const ventas = data.ventas || [];
       let total = 0;
 
-      if (ventas.length === 0) {
-        $("#md-vacio").classList.remove("d-none");
-      } else {
+      if (ventas.length === 0) $("#md-vacio").classList.remove("d-none");
+      else {
         ventas.forEach(v => {
           total += v.ingreso;
           const tr = document.createElement("tr");
@@ -283,13 +277,11 @@
       $("#md-total").textContent = `$${total.toFixed(2)}`;
       modal.show();
     } catch (e) {
-      console.error(e);
       errText.textContent = "❌ No se pudieron cargar los detalles de ventas.";
       toastErr.show();
     }
   }
 
-  // Click en botón de "vendidas hoy"
   $$(".ver-detalles-venta").forEach(btn => {
     btn.addEventListener("click", () => {
       const productoId = btn.dataset.productoId;
@@ -303,47 +295,34 @@
   $("#md-tbody")?.addEventListener("click", async (e) => {
     const btn = e.target.closest(".eliminar-venta");
     if (!btn) return;
-
     const ventaId = btn.dataset.ventaId;
     const productoId = btn.dataset.productoId;
     if (!ventaId) return;
 
     btn.disabled = true;
     try {
-      const res = await fetch(`/eliminar_venta/${ventaId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({})
-      });
+      const res = await fetch(`/eliminar_venta/${ventaId}`, { method: "POST" });
       const data = await res.json();
 
-      if (!data.success) {
-        throw new Error(data.error || "No fue posible eliminar la venta.");
-      }
+      if (!data.success) throw new Error(data.error || "No fue posible eliminar la venta.");
 
-      // ✅ Actualizar UI del modal (quitar fila y recomputar total)
       const row = btn.closest("tr");
       const ingreso = parseFloat(row.children[2].textContent.replace("$","")) || 0;
       row.remove();
 
-      // Recalcular total del modal
       let total = 0;
       $$("#md-tbody tr").forEach(tr => {
         const val = parseFloat(tr.children[2].textContent.replace("$","")) || 0;
         total += val;
       });
       $("#md-total").textContent = `$${total.toFixed(2)}`;
-      if ($$("#md-tbody tr").length === 0) {
-        $("#md-vacio").classList.remove("d-none");
-      }
+      if ($$("#md-tbody tr").length === 0) $("#md-vacio").classList.remove("d-none");
 
-      // ✅ Actualizar fila de producto en tabla principal
       const fila = $("#producto-" + productoId);
       fila.querySelector(".stock-actual").textContent = data.stock;
       fila.querySelector(".vendidas-dia button").textContent = data.vendidas_dia;
       fila.querySelector(".valor-vendido-dia").textContent = data.valor_vendido_dia.toFixed(2);
 
-      // ✅ Actualizar total vendido hoy (restar)
       const totalEl = $("#total-vendido-hoy");
       totalEl.textContent = (parseFloat(totalEl.textContent) - ingreso).toFixed(2);
 
@@ -352,7 +331,6 @@
       sonidoOk.play();
 
     } catch (err) {
-      console.error(err);
       errText.textContent = "❌ No se pudo eliminar la venta.";
       toastErr.show();
     } finally {
@@ -360,5 +338,23 @@
     }
   });
 })();
+</script>
+
+<!-- ✨ Scroll automático y resaltado del nuevo producto -->
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const anchor = window.location.hash;
+  if (anchor && anchor.startsWith("#producto-")) {
+    const elemento = document.querySelector(anchor);
+    if (elemento) {
+      elemento.scrollIntoView({ behavior: "smooth", block: "center" });
+      elemento.style.transition = "background-color 0.6s ease";
+      elemento.style.backgroundColor = "#fffa8b";
+      setTimeout(() => {
+        elemento.style.backgroundColor = "";
+      }, 2500);
+    }
+  }
+});
 </script>
 {% endblock %}

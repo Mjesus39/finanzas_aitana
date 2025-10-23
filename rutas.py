@@ -113,6 +113,28 @@ def index():
         total_vendido=total_vendido,
         estado_class=estado_class  # ✅ Se pasa al template
     )
+
+@app_rutas.route("/actualizar_precio/<int:producto_id>", methods=["POST"])
+@login_required
+def actualizar_precio(producto_id):
+    from flask import request, jsonify
+    try:
+        data = request.get_json()
+        nuevo_precio = float(data.get("precio", 0))
+        if nuevo_precio <= 0:
+            return jsonify({"success": False, "error": "Precio inválido."}), 400
+
+        producto = Producto.query.get_or_404(producto_id)
+        # Guardamos el precio base ajustado, recalculando según el interés actual
+        producto.valor_unitario = nuevo_precio / (1 + (producto.interes or 0) / 100)
+        db.session.commit()
+
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # ======================================================
 # 📋 Detalle de ventas de HOY por producto (JSON para el modal)
 # ======================================================
@@ -212,6 +234,7 @@ def nuevo_producto():
         db.session.add(nuevo)
         db.session.commit()
 
+        # 📦 Registrar en historial si tiene stock inicial
         if stock_inicial > 0:
             valor_total = stock_inicial * valor_unitario
             historial = HistorialInventario(
@@ -223,10 +246,13 @@ def nuevo_producto():
             db.session.add(historial)
             db.session.commit()
 
+        # ✅ Mensaje y redirección directa a la lista principal (index)
         flash(f"✅ Producto '{nombre}' agregado correctamente (Código: {codigo}).", "success")
-        return redirect(url_for("app_rutas.entrada_inventario"))
+        return redirect(url_for("app_rutas.index", _anchor=f"producto-{nuevo.id}"))
 
+    # 🧾 Mostrar formulario al entrar en la página
     return render_template("nuevo_producto.html")
+
 
 # ======================================================
 # 🛒 REGISTRAR VENTA (versión robusta)

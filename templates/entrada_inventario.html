@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 {% block title %}📦 Inventario{% endblock %}
 
@@ -55,21 +56,28 @@
               <th>Orden</th>
               <th>Código</th>
               <th>Producto</th>
-              <th>Valor Unitario</th>
-              <th>Ganancia (%)</th>
+              <th>💰 Precio con Ganancia</th>
               <th>Stock</th>
+              <th>⚙️ Acción</th>
             </tr>
           </thead>
           <tbody>
             {% if productos %}
               {% for p in productos %}
-              <tr>
+              {% set precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
+              <tr id="producto-{{ p.id }}">
                 <td>{{ p.orden }}</td>
                 <td>{{ p.codigo }}</td>
                 <td class="fw-bold">{{ p.nombre }}</td>
-                <td>${{ "%.2f"|format(p.valor_unitario) }}</td>
-                <td>{{ "%.1f"|format(p.interes) }}%</td>
+                <td class="precio text-success fw-bold" data-id="{{ p.id }}">
+                  ${{ "%.2f"|format(precio_ganancia) }}
+                </td>
                 <td>{{ p.unidades_restantes }}</td>
+                <td>
+                  <button class="btn btn-sm btn-outline-primary editar-precio" data-id="{{ p.id }}">
+                    ✏️ Editar
+                  </button>
+                </td>
               </tr>
               {% endfor %}
             {% else %}
@@ -105,7 +113,6 @@
           <tbody>
             {% for h in historial %}
             <tr>
-              <!-- 🕒 Se muestra la hora local de Chile -->
               <td>{{ h.fecha|hora_chile }}</td>
               <td>{{ h.producto.codigo }}</td>
               <td class="fw-bold">{{ h.producto.nombre }}</td>
@@ -123,6 +130,24 @@
   </div>
 
 </div>
+
+<!-- ✅ Toasts -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
+  <div id="toast-success" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body fw-bold" id="toast-success-text">✅ Acción completada correctamente.</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+
+  <div id="toast-error" class="toast align-items-center text-bg-danger border-0 mt-2" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body fw-bold" id="toast-error-text">❌ Error al realizar la acción.</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -134,6 +159,78 @@ $(document).ready(function() {
     order: [[0, 'asc']],
     language: {
       url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
+    }
+  });
+});
+</script>
+
+<!-- ✏️ Edición de precio directo desde Inventario con TOASTS -->
+<script>
+document.addEventListener("click", async function (e) {
+  const btn = e.target.closest(".editar-precio");
+  if (!btn) return;
+
+  const id = btn.dataset.id;
+  const celda = document.querySelector(`#producto-${id} .precio`);
+  const valorActual = parseFloat(celda.textContent.replace("$","").trim());
+
+  // Crear input temporal
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = "0";
+  input.step = "0.01";
+  input.value = valorActual.toFixed(2);
+  input.className = "form-control text-center fw-bold";
+  celda.innerHTML = "";
+  celda.appendChild(input);
+  input.focus();
+
+  // Inicializar toasts de Bootstrap
+  const toastOk = new bootstrap.Toast(document.getElementById("toast-success"), { delay: 2000 });
+  const toastErr = new bootstrap.Toast(document.getElementById("toast-error"), { delay: 3000 });
+  const okText = document.getElementById("toast-success-text");
+  const errText = document.getElementById("toast-error-text");
+
+  async function guardar() {
+    const nuevoPrecio = parseFloat(input.value);
+    if (isNaN(nuevoPrecio) || nuevoPrecio <= 0) {
+      errText.textContent = "⚠️ Precio inválido.";
+      toastErr.show();
+      celda.textContent = `$${valorActual.toFixed(2)}`;
+      return;
+    }
+
+    try {
+      const res = await fetch(`/actualizar_precio/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ precio: nuevoPrecio })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        celda.textContent = `$${nuevoPrecio.toFixed(2)}`;
+        celda.classList.add("bg-success", "text-white");
+        okText.textContent = `✅ Precio actualizado correctamente a $${nuevoPrecio.toFixed(2)}.`;
+        toastOk.show();
+        setTimeout(() => celda.classList.remove("bg-success", "text-white"), 1500);
+      } else {
+        errText.textContent = "❌ Error al actualizar el precio.";
+        toastErr.show();
+        celda.textContent = `$${valorActual.toFixed(2)}`;
+      }
+    } catch {
+      errText.textContent = "❌ Error de conexión con el servidor.";
+      toastErr.show();
+      celda.textContent = `$${valorActual.toFixed(2)}`;
+    }
+  }
+
+  input.addEventListener("blur", guardar);
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      guardar();
     }
   });
 });
