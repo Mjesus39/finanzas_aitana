@@ -128,3 +128,25 @@ def estado_class(producto):
         return "table-warning"  # 🟡 Pocas unidades
     else:
         return "table-success"  # 🟢 Disponible
+
+# ======================================================
+# 🔁 RESETEAR VENTAS DIARIAS (versión robusta, hora Chile)
+# ======================================================
+from tiempo import local_date  # 👈 asegúrate de tener esto arriba
+
+def resetear_ventas_dia():
+    """Reinicia las ventas diarias si cambió el día (según hora local Chile)."""
+    hoy = local_date()  # ✅ Fecha local de Chile
+    cambios = 0
+
+    for producto in Producto.query.all():
+        if getattr(producto, "fecha", None) != hoy:
+            producto.vendidas_dia = 0
+            producto.valor_vendido_dia = 0
+            producto.fecha = hoy
+            cambios += 1
+
+    if cambios > 0:
+        db.session.commit()
+        print(f"🔄 Ventas diarias reiniciadas para {cambios} productos ({hoy})")
+

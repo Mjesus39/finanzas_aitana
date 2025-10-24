@@ -63,55 +63,58 @@ def generar_codigo_unico(modelo):
     return code
 
 # ======================================================
-# 🏠 INDEX
+# 🏠 INDEX — Reinicio diario real (sin depender de session)
 # ======================================================
 @app_rutas.route("/")
 @login_required
 def index():
-    hoy = local_date().isoformat()
-    ultima_actualizacion = session.get("ultima_actualizacion")
+    hoy = local_date()  # ✅ Fecha local Chile
 
-    # 🔄 Reiniciar valores al iniciar nuevo día
-    if ultima_actualizacion != hoy:
-        for p in Producto.query.all():
+    # 🔄 Reiniciar valores diarios si el producto tiene una fecha anterior
+    productos = Producto.query.all()
+    cambios = 0
+    for p in productos:
+        if p.fecha != hoy:
             p.vendidas_dia = 0
             p.valor_vendido_dia = 0.0
-            p.fecha = local_date()
-        db.session.commit()
-        session["ultima_actualizacion"] = hoy
+            p.fecha = hoy
+            cambios += 1
 
-    # 🔁 Sincronizar valores reales de ventas del día
-    hoy_fecha = local_date()
-    start, end = day_range(hoy_fecha)
-    for producto in Producto.query.all():
+    if cambios > 0:
+        db.session.commit()
+        print(f"🔁 Ventas diarias reiniciadas para {cambios} productos ({hoy})")
+
+    # 🔁 Sincronizar ventas reales del día actual
+    start, end = day_range(hoy)
+    for p in productos:
         ventas_dia = Venta.query.filter(
-            Venta.producto_id == producto.id,
+            Venta.producto_id == p.id,
             Venta.fecha >= start,
             Venta.fecha < end
         ).all()
-        producto.vendidas_dia = sum(v.cantidad for v in ventas_dia)
-        producto.valor_vendido_dia = sum(v.ingreso for v in ventas_dia)
+        p.vendidas_dia = sum(v.cantidad for v in ventas_dia)
+        p.valor_vendido_dia = sum(v.ingreso for v in ventas_dia)
     db.session.commit()
 
-    # 🔢 Ordenar productos y calcular totales
+    # 🔢 Reordenar productos
     productos = Producto.query.order_by(Producto.orden.asc(), Producto.id.asc()).all()
     for idx, p in enumerate(productos, start=1):
         if not p.orden or p.orden != idx:
             p.orden = idx
     db.session.commit()
 
-    # 💰 Calcular precios con interés
+    # 💰 Calcular precios con ganancia
     for p in productos:
         p.precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0) / 100)
 
     total_vendido = sum(p.valor_vendido_dia or 0 for p in productos)
 
-    # 🧾 Renderizar plantilla con función visual incluida
+    # 🧾 Renderizar plantilla
     return render_template(
         "index.html",
         productos=productos,
         total_vendido=total_vendido,
-        estado_class=estado_class  # ✅ Se pasa al template
+        estado_class=estado_class
     )
 
 # ======================================================
