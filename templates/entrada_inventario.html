@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 {% block title %}📦 Inventario{% endblock %}
 
@@ -53,7 +52,6 @@
         <table id="tabla-productos" class="table table-hover align-middle text-center mb-0">
           <thead class="table-dark">
             <tr>
-              <th>Orden</th>
               <th>Código</th>
               <th>Producto</th>
               <th>💰 Precio con Ganancia</th>
@@ -66,15 +64,14 @@
               {% for p in productos %}
               {% set precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
               <tr id="producto-{{ p.id }}">
-                <td>{{ p.orden }}</td>
                 <td>{{ p.codigo }}</td>
-                <td class="fw-bold">{{ p.nombre }}</td>
+                <td class="nombre fw-bold" data-id="{{ p.id }}">{{ p.nombre }}</td>
                 <td class="precio text-success fw-bold" data-id="{{ p.id }}">
                   ${{ "%.2f"|format(precio_ganancia) }}
                 </td>
                 <td>{{ p.unidades_restantes }}</td>
                 <td>
-                  <button class="btn btn-sm btn-outline-primary editar-precio" data-id="{{ p.id }}">
+                  <button class="btn btn-sm btn-outline-primary editar-producto" data-id="{{ p.id }}">
                     ✏️ Editar
                   </button>
                 </td>
@@ -82,7 +79,7 @@
               {% endfor %}
             {% else %}
               <tr>
-                <td colspan="6" class="text-center text-muted py-3">⚠️ No hay productos en inventario.</td>
+                <td colspan="5" class="text-center text-muted py-3">⚠️ No hay productos en inventario.</td>
               </tr>
             {% endif %}
           </tbody>
@@ -103,6 +100,7 @@
         <table class="table table-striped table-bordered align-middle text-center mb-0">
           <thead class="table-dark">
             <tr>
+              <th>❌</th>
               <th>Fecha y Hora</th>
               <th>Código</th>
               <th>Producto</th>
@@ -112,7 +110,10 @@
           </thead>
           <tbody>
             {% for h in historial %}
-            <tr>
+            <tr id="entrada-{{ h.id }}">
+              <td>
+                <button class="btn btn-sm btn-outline-danger eliminar-entrada" data-id="{{ h.id }}">✖</button>
+              </td>
               <td>{{ h.fecha|hora_chile }}</td>
               <td>{{ h.producto.codigo }}</td>
               <td class="fw-bold">{{ h.producto.nombre }}</td>
@@ -153,86 +154,113 @@
 {% block scripts %}
 <script>
 $(document).ready(function() {
-  // Inicializa DataTables
   $('#tabla-productos').DataTable({
     pageLength: 10,
     order: [[0, 'asc']],
-    language: {
-      url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
-    }
+    language: { url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' }
   });
 });
 </script>
 
-<!-- ✏️ Edición de precio directo desde Inventario con TOASTS -->
+<!-- ✏️ Editar nombre y precio -->
 <script>
 document.addEventListener("click", async function (e) {
-  const btn = e.target.closest(".editar-precio");
+  const btn = e.target.closest(".editar-producto");
   if (!btn) return;
 
   const id = btn.dataset.id;
-  const celda = document.querySelector(`#producto-${id} .precio`);
-  const valorActual = parseFloat(celda.textContent.replace("$","").trim());
+  const nombreCelda = document.querySelector(`#producto-${id} .nombre`);
+  const precioCelda = document.querySelector(`#producto-${id} .precio`);
+  const nombreActual = nombreCelda.textContent.trim();
+  const precioActual = parseFloat(precioCelda.textContent.replace("$", "").trim());
 
-  // Crear input temporal
-  const input = document.createElement("input");
-  input.type = "number";
-  input.min = "0";
-  input.step = "0.01";
-  input.value = valorActual.toFixed(2);
-  input.className = "form-control text-center fw-bold";
-  celda.innerHTML = "";
-  celda.appendChild(input);
-  input.focus();
+  // Inputs
+  nombreCelda.innerHTML = `<input type="text" class="form-control text-center fw-bold" value="${nombreActual}">`;
+  precioCelda.innerHTML = `<input type="number" min="0" step="0.01" class="form-control text-center fw-bold" value="${precioActual.toFixed(2)}">`;
 
-  // Inicializar toasts de Bootstrap
+  const inputNombre = nombreCelda.querySelector("input");
+  const inputPrecio = precioCelda.querySelector("input");
+  inputNombre.focus();
+
   const toastOk = new bootstrap.Toast(document.getElementById("toast-success"), { delay: 2000 });
   const toastErr = new bootstrap.Toast(document.getElementById("toast-error"), { delay: 3000 });
   const okText = document.getElementById("toast-success-text");
   const errText = document.getElementById("toast-error-text");
 
   async function guardar() {
-    const nuevoPrecio = parseFloat(input.value);
-    if (isNaN(nuevoPrecio) || nuevoPrecio <= 0) {
-      errText.textContent = "⚠️ Precio inválido.";
+    const nuevoNombre = inputNombre.value.trim();
+    const nuevoPrecio = parseFloat(inputPrecio.value);
+    if (!nuevoNombre || isNaN(nuevoPrecio) || nuevoPrecio <= 0) {
+      errText.textContent = "⚠️ Datos inválidos.";
       toastErr.show();
-      celda.textContent = `$${valorActual.toFixed(2)}`;
+      nombreCelda.textContent = nombreActual;
+      precioCelda.textContent = `$${precioActual.toFixed(2)}`;
       return;
     }
 
     try {
-      const res = await fetch(`/actualizar_precio/${id}`, {
+      const res = await fetch(`/actualizar_producto/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ precio: nuevoPrecio })
+        body: JSON.stringify({ nombre: nuevoNombre, precio: nuevoPrecio })
       });
-
       const data = await res.json();
+
       if (data.success) {
-        celda.textContent = `$${nuevoPrecio.toFixed(2)}`;
-        celda.classList.add("bg-success", "text-white");
-        okText.textContent = `✅ Precio actualizado correctamente a $${nuevoPrecio.toFixed(2)}.`;
+        nombreCelda.textContent = nuevoNombre;
+        precioCelda.textContent = `$${nuevoPrecio.toFixed(2)}`;
+        okText.textContent = data.message;
         toastOk.show();
-        setTimeout(() => celda.classList.remove("bg-success", "text-white"), 1500);
       } else {
-        errText.textContent = "❌ Error al actualizar el precio.";
+        errText.textContent = data.error || "❌ Error al actualizar.";
         toastErr.show();
-        celda.textContent = `$${valorActual.toFixed(2)}`;
+        nombreCelda.textContent = nombreActual;
+        precioCelda.textContent = `$${precioActual.toFixed(2)}`;
       }
     } catch {
       errText.textContent = "❌ Error de conexión con el servidor.";
       toastErr.show();
-      celda.textContent = `$${valorActual.toFixed(2)}`;
+      nombreCelda.textContent = nombreActual;
+      precioCelda.textContent = `$${precioActual.toFixed(2)}`;
     }
   }
 
-  input.addEventListener("blur", guardar);
-  input.addEventListener("keydown", e => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      guardar();
+  inputPrecio.addEventListener("blur", guardar);
+  inputPrecio.addEventListener("keydown", e => { if (e.key === "Enter") guardar(); });
+  inputNombre.addEventListener("keydown", e => { if (e.key === "Enter") guardar(); });
+});
+</script>
+
+<!-- 🗑️ Eliminar entrada del historial -->
+<script>
+document.addEventListener("click", async function (e) {
+  const btn = e.target.closest(".eliminar-entrada");
+  if (!btn) return;
+
+  const id = btn.dataset.id;
+  if (!confirm("¿Eliminar esta entrada del historial? Esta acción reducirá el stock.")) return;
+
+  const toastOk = new bootstrap.Toast(document.getElementById("toast-success"), { delay: 2000 });
+  const toastErr = new bootstrap.Toast(document.getElementById("toast-error"), { delay: 3000 });
+  const okText = document.getElementById("toast-success-text");
+  const errText = document.getElementById("toast-error-text");
+
+  try {
+    const res = await fetch(`/eliminar_entrada_inventario/${id}`, { method: "DELETE" });
+    const data = await res.json();
+
+    if (data.success) {
+      document.getElementById(`entrada-${id}`).remove();
+      okText.textContent = "✅ Entrada eliminada correctamente.";
+      toastOk.show();
+    } else {
+      errText.textContent = data.error || "❌ No se pudo eliminar.";
+      toastErr.show();
     }
-  });
+  } catch {
+    errText.textContent = "❌ Error de conexión con el servidor.";
+    toastErr.show();
+  }
 });
 </script>
 {% endblock %}

@@ -114,25 +114,71 @@ def index():
         estado_class=estado_class  # ✅ Se pasa al template
     )
 
-@app_rutas.route("/actualizar_precio/<int:producto_id>", methods=["POST"])
+# ======================================================
+# ✏️ ACTUALIZAR NOMBRE Y/O PRECIO DE PRODUCTO — versión robusta final
+# ======================================================
+@app_rutas.route("/actualizar_producto/<int:producto_id>", methods=["POST"])
 @login_required
-def actualizar_precio(producto_id):
-    from flask import request, jsonify
+def actualizar_producto(producto_id):
     try:
-        data = request.get_json()
-        nuevo_precio = float(data.get("precio", 0))
-        if nuevo_precio <= 0:
-            return jsonify({"success": False, "error": "Precio inválido."}), 400
+        data = request.get_json() or {}
+        nuevo_precio = data.get("precio")
+        nuevo_nombre = data.get("nombre", "").strip() if data.get("nombre") else None
 
-        producto = Producto.query.get_or_404(producto_id)
-        # Guardamos el precio base ajustado, recalculando según el interés actual
-        producto.valor_unitario = nuevo_precio / (1 + (producto.interes or 0) / 100)
+        # 🔍 Buscar producto
+        producto = Producto.query.get(producto_id)
+        if not producto:
+            return jsonify({
+                "success": False,
+                "error": "❌ Producto no encontrado."
+            }), 404
+
+        # 💰 Actualizar precio (solo si se envió)
+        if nuevo_precio is not None:
+            try:
+                nuevo_precio = float(nuevo_precio)
+                if nuevo_precio <= 0:
+                    return jsonify({
+                        "success": False,
+                        "error": "⚠️ El precio debe ser mayor que cero."
+                    }), 400
+                producto.valor_unitario = round(
+                    nuevo_precio / (1 + (producto.interes or 0) / 100), 2
+                )
+            except ValueError:
+                return jsonify({
+                    "success": False,
+                    "error": "⚠️ Precio inválido."
+                }), 400
+
+        # 🏷️ Actualizar nombre (solo si se envió)
+        if nuevo_nombre:
+            producto.nombre = nuevo_nombre
+
+        # ⚠️ Si no se envió ni nombre ni precio
+        if nuevo_precio is None and not nuevo_nombre:
+            return jsonify({
+                "success": False,
+                "error": "⚠️ No se proporcionaron datos para actualizar."
+            }), 400
+
         db.session.commit()
 
-        return jsonify({"success": True})
+        # ✅ Éxito
+        return jsonify({
+            "success": True,
+            "id": producto.id,
+            "nombre": producto.nombre,
+            "nuevo_precio": round(nuevo_precio, 2) if nuevo_precio else None,
+            "mensaje": f"✅ Producto '{producto.nombre}' actualizado correctamente."
+        })
+
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({
+            "success": False,
+            "error": f"❌ Error interno: {str(e)}"
+        }), 500
 
 
 # ======================================================
@@ -182,6 +228,29 @@ def detalle_ventas_producto(producto_id):
 
 
 # ======================================================
+# 🗑️ ELIMINAR ENTRADA DE HISTORIAL DE INVENTARIO
+# ======================================================
+@app_rutas.route("/eliminar_entrada_inventario/<int:entrada_id>", methods=["DELETE"])
+@login_required
+def eliminar_entrada_inventario(entrada_id):
+    try:
+        entrada = HistorialInventario.query.get_or_404(entrada_id)
+
+        # 🔁 Restaurar el stock restando la cantidad ingresada en esa entrada
+        producto = entrada.producto
+        if producto:
+            producto.unidades_restantes = max(producto.unidades_restantes - entrada.cantidad, 0)
+
+        db.session.delete(entrada)
+        db.session.commit()
+
+        return jsonify({"success": True, "message": "Entrada eliminada correctamente."})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ======================================================
 # 📊 DASHBOARD
 # ======================================================
 @app_rutas.route("/dashboard")
@@ -208,49 +277,73 @@ def dashboard():
     )
 
 # ======================================================
-# 🆕 NUEVO PRODUCTO
+# 🆕 NUEVO PRODUCTO — versión optimizada (rápida + AJAX)
 # ======================================================
 @app_rutas.route("/nuevo_producto", methods=["GET", "POST"])
 @login_required
 def nuevo_producto():
     if request.method == "POST":
-        nombre = request.form.get("nombre")
-        orden = int(request.form.get("orden") or 0)
-        valor_unitario = float(request.form.get("valor_unitario") or 0)
-        interes = float(request.form.get("interes") or 0)
-        stock_inicial = int(request.form.get("stock_inicial") or 0)
-        codigo = generar_codigo_unico(Producto)
+        try:
+            # 🧾 Datos del formulario
+            nombre = request.form.get("nombre", "").strip().upper()
+            orden = int(request.form.get("orden") or 0)
+            valor_unitario = float(request.form.get("valor_unitario") or 0)
+            interes = float(request.form.get("interes") or 0)
+            stock_inicial = int(request.form.get("stock_inicial") or 0)
+            codigo = generar_codigo_unico(Producto)
 
-        nuevo = Producto(
-            codigo=codigo,
-            orden=orden,
-            nombre=nombre,
-            valor_unitario=valor_unitario,
-            interes=interes,
-            stock_inicial=stock_inicial,
-            unidades_restantes=stock_inicial,
-            fecha=local_date()
-        )
-        db.session.add(nuevo)
-        db.session.commit()
-
-        # 📦 Registrar en historial si tiene stock inicial
-        if stock_inicial > 0:
-            valor_total = stock_inicial * valor_unitario
-            historial = HistorialInventario(
-                producto_id=nuevo.id,
-                cantidad=stock_inicial,
-                valor_total=valor_total,
-                fecha=hora_actual()
+            # 🚀 Crear producto
+            nuevo = Producto(
+                codigo=codigo,
+                orden=orden,
+                nombre=nombre,
+                valor_unitario=valor_unitario,
+                interes=interes,
+                stock_inicial=stock_inicial,
+                unidades_restantes=stock_inicial,
+                fecha=local_date(),
             )
-            db.session.add(historial)
+            db.session.add(nuevo)
             db.session.commit()
 
-        # ✅ Mensaje y redirección directa a la lista principal (index)
-        flash(f"✅ Producto '{nombre}' agregado correctamente (Código: {codigo}).", "success")
-        return redirect(url_for("app_rutas.index", _anchor=f"producto-{nuevo.id}"))
+            # 📦 Registrar historial (solo si tiene stock inicial)
+            if stock_inicial > 0:
+                valor_total = stock_inicial * valor_unitario
+                historial = HistorialInventario(
+                    producto_id=nuevo.id,
+                    cantidad=stock_inicial,
+                    valor_total=valor_total,
+                    fecha=hora_actual(),
+                )
+                db.session.add(historial)
+                db.session.commit()
 
-    # 🧾 Mostrar formulario al entrar en la página
+            # ⚡ Si viene desde AJAX, responder sin recargar
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({
+                    "success": True,
+                    "id": nuevo.id,
+                    "codigo": nuevo.codigo,
+                    "nombre": nuevo.nombre,
+                    "precio": round(nuevo.valor_unitario * (1 + nuevo.interes / 100), 2),
+                    "stock": nuevo.unidades_restantes
+                })
+
+            # ✅ Modo normal (sin AJAX)
+            flash(f"✅ Producto '{nombre}' agregado correctamente (Código: {codigo}).", "success")
+            return redirect(url_for("app_rutas.inventario", _anchor=f"producto-{nuevo.id}"))
+
+        except Exception as e:
+            db.session.rollback()
+
+            # ❌ Error vía AJAX
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"success": False, "error": str(e)}), 500
+
+            flash(f"❌ Error al agregar producto: {e}", "danger")
+            return redirect(url_for("app_rutas.inventario"))
+
+    # 🧾 Mostrar formulario de creación
     return render_template("nuevo_producto.html")
 
 
@@ -478,50 +571,88 @@ def detalle_salida(fecha):
         return redirect(url_for("app_rutas.liquidacion"))
 
 # ======================================================
-# 📦 ENTRADA DE INVENTARIO
+# 📦 ENTRADA DE INVENTARIO — versión optimizada (rápida + AJAX)
 # ======================================================
 @app_rutas.route("/entrada_inventario", methods=["GET", "POST"])
 @login_required
 def entrada_inventario():
     if request.method == "POST":
-        codigo = request.form.get("codigo")
-        cantidad = int(request.form.get("cantidad", 0))
-        producto = Producto.query.filter_by(codigo=codigo).first()
+        try:
+            codigo = request.form.get("codigo", "").strip()
+            cantidad = int(request.form.get("cantidad", 0))
 
-        if not producto:
-            flash("❌ No se encontró un producto con ese código.", "danger")
+            # 🧩 Validaciones
+            if not codigo:
+                flash("⚠️ Debes ingresar un código de producto.", "warning")
+                return redirect(url_for("app_rutas.entrada_inventario"))
+
+            producto = Producto.query.filter_by(codigo=codigo).first()
+            if not producto:
+                flash("❌ No se encontró un producto con ese código.", "danger")
+                return redirect(url_for("app_rutas.entrada_inventario"))
+
+            if cantidad <= 0:
+                flash("⚠️ La cantidad debe ser mayor a cero.", "warning")
+                return redirect(url_for("app_rutas.entrada_inventario"))
+
+            # 📦 Actualizar stock
+            producto.unidades_restantes += cantidad
+            producto.stock_inicial += cantidad
+            valor_total = (producto.valor_unitario or 0) * cantidad
+
+            # 🕒 Registrar historial
+            historial = HistorialInventario(
+                producto_id=producto.id,
+                cantidad=cantidad,
+                valor_total=valor_total,
+                fecha=hora_actual()
+            )
+            db.session.add(historial)
+
+            # 🧹 Eliminar registros antiguos (más de 90 días)
+            limite = hora_actual() - timedelta(days=90)
+            HistorialInventario.query.filter(
+                HistorialInventario.fecha < limite
+            ).delete()
+
+            db.session.commit()
+
+            # ⚡ Si es una solicitud AJAX, devolver JSON
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({
+                    "success": True,
+                    "producto": producto.nombre,
+                    "cantidad": cantidad,
+                    "nuevo_stock": producto.unidades_restantes,
+                    "valor_total": round(valor_total, 2),
+                    "fecha": hora_actual().strftime("%Y-%m-%d %H:%M:%S")
+                })
+
+            # ✅ Respuesta normal (modo HTML)
+            flash(f"✅ {cantidad} unidades agregadas a {producto.nombre}.", "success")
             return redirect(url_for("app_rutas.entrada_inventario"))
 
-        if cantidad <= 0:
-            flash("⚠️ La cantidad debe ser mayor a cero.", "warning")
+        except Exception as e:
+            db.session.rollback()
+
+            # ❌ Error vía AJAX
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"success": False, "error": str(e)}), 500
+
+            flash(f"❌ Error al registrar entrada: {e}", "danger")
             return redirect(url_for("app_rutas.entrada_inventario"))
 
-        producto.unidades_restantes += cantidad
-        valor_total = (producto.valor_unitario or 0) * cantidad
-
-        historial = HistorialInventario(
-            producto_id=producto.id,
-            cantidad=cantidad,
-            valor_total=valor_total,
-            fecha=hora_actual()
-        )
-        db.session.add(historial)
-
-        # 🧹 limpiar registros de más de 90 días
-        limite = hora_actual() - timedelta(days=90)
-        HistorialInventario.query.filter(HistorialInventario.fecha < limite).delete()
-
-        db.session.commit()
-        flash(f"✅ {cantidad} unidades agregadas a {producto.nombre}.", "success")
-        return redirect(url_for("app_rutas.entrada_inventario"))
-
-    productos = Producto.query.order_by(Producto.orden.asc()).all()
+    # 📋 Vista GET — mostrar inventario y últimos 90 días
+    productos = Producto.query.order_by(Producto.nombre.asc()).all()
     limite = hora_actual() - timedelta(days=90)
-    historial = HistorialInventario.query.filter(HistorialInventario.fecha >= limite) \
-        .order_by(HistorialInventario.fecha.desc()).all()
+    historial = (
+        HistorialInventario.query
+        .filter(HistorialInventario.fecha >= limite)
+        .order_by(HistorialInventario.fecha.desc())
+        .all()
+    )
 
     return render_template("entrada_inventario.html", productos=productos, historial=historial)
-
 
 
 # ======================================================

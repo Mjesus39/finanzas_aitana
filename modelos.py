@@ -19,10 +19,12 @@ class Producto(db.Model):
     vendidas_dia = db.Column(db.Integer, default=0)
     valor_vendido_dia = db.Column(db.Float, default=0.0)
 
+    # 🔥 Relación con historial — elimina todo al borrar producto
     historial_inventario = db.relationship(
         "HistorialInventario",
         back_populates="producto",
-        cascade="all, delete"
+        cascade="all, delete-orphan",
+        passive_deletes=True
     )
 
 
