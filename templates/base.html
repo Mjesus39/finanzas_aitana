@@ -16,6 +16,7 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      font-family: "Segoe UI", sans-serif;
     }
 
     nav.navbar {
@@ -38,6 +39,22 @@
     .nav-link.active {
       font-weight: bold;
       color: #0d6efd !important;
+    }
+
+    /* 🔄 Overlay de carga */
+    #loadingOverlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255, 255, 255, 0.85);
+      z-index: 2000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      pointer-events: none;
     }
   </style>
 </head>
@@ -100,17 +117,72 @@
         </div>
       {% endif %}
     {% endwith %}
+
     {% block content %}{% endblock %}
   </main>
 
   <!-- ⚙️ Footer -->
   <footer>
     <div class="text-center">
-      <small>© 2025 Aitana System</small>
+      <small>© 2025 Aitana System - Desarrollado con ❤️ por Manuel Herrera</small>
     </div>
   </footer>
 
-  <!-- Bloque de scripts específicos de cada página -->
+  <!-- 🔄 Overlay "Procesando..." -->
+  <div id="loadingOverlay">
+    <div class="spinner-border text-primary" style="width:4rem;height:4rem;" role="status"></div>
+    <p class="mt-3 text-primary fw-bold fs-5">Procesando...</p>
+  </div>
+
+  <!-- ⚙️ Script del overlay -->
+  <script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const overlay = document.getElementById("loadingOverlay");
+    let visible = false;
+
+    function mostrar() {
+      if (visible) return;
+      visible = true;
+      overlay.style.pointerEvents = "auto";
+      overlay.style.visibility = "visible";
+      overlay.style.opacity = "1";
+    }
+
+    function ocultar() {
+      visible = false;
+      overlay.style.opacity = "0";
+      overlay.style.visibility = "hidden";
+      overlay.style.pointerEvents = "none";
+    }
+
+    // Mostrar al enviar formularios
+    document.querySelectorAll("form").forEach(form => {
+      form.addEventListener("submit", () => {
+        mostrar();
+        setTimeout(ocultar, 10000);
+      });
+    });
+
+    // Mostrar al hacer clic en enlaces internos
+    document.querySelectorAll("a[href]").forEach(link => {
+      const href = link.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("javascript:") || link.target === "_blank") return;
+      link.addEventListener("click", () => {
+        mostrar();
+        setTimeout(ocultar, 10000);
+      });
+    });
+
+    // Funciones globales para fetch
+    window.mostrarProcesando = mostrar;
+    window.ocultarProcesando = ocultar;
+
+    // Asegurar que esté oculto al inicio
+    window.addEventListener("load", ocultar);
+    ocultar();
+  });
+  </script>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>
