@@ -287,7 +287,6 @@ def dashboard():
 def nuevo_producto():
     if request.method == "POST":
         try:
-            # 🧾 Datos del formulario
             nombre = request.form.get("nombre", "").strip().upper()
             orden = int(request.form.get("orden") or 0)
             valor_unitario = float(request.form.get("valor_unitario") or 0)
@@ -295,7 +294,6 @@ def nuevo_producto():
             stock_inicial = int(request.form.get("stock_inicial") or 0)
             codigo = generar_codigo_unico(Producto)
 
-            # 🚀 Crear producto
             nuevo = Producto(
                 codigo=codigo,
                 orden=orden,
@@ -309,7 +307,6 @@ def nuevo_producto():
             db.session.add(nuevo)
             db.session.commit()
 
-            # 📦 Registrar historial (solo si tiene stock inicial)
             if stock_inicial > 0:
                 valor_total = stock_inicial * valor_unitario
                 historial = HistorialInventario(
@@ -321,7 +318,6 @@ def nuevo_producto():
                 db.session.add(historial)
                 db.session.commit()
 
-            # ⚡ Si viene desde AJAX, responder sin recargar
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
                 return jsonify({
                     "success": True,
@@ -332,21 +328,18 @@ def nuevo_producto():
                     "stock": nuevo.unidades_restantes
                 })
 
-            # ✅ Modo normal (sin AJAX)
             flash(f"✅ Producto '{nombre}' agregado correctamente (Código: {codigo}).", "success")
-            return redirect(url_for("app_rutas.inventario", _anchor=f"producto-{nuevo.id}"))
+            return redirect(url_for("app_rutas.entrada_inventario", _anchor=f"producto-{nuevo.id}"))
 
         except Exception as e:
             db.session.rollback()
 
-            # ❌ Error vía AJAX
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
                 return jsonify({"success": False, "error": str(e)}), 500
 
             flash(f"❌ Error al agregar producto: {e}", "danger")
-            return redirect(url_for("app_rutas.inventario"))
+            return redirect(url_for("app_rutas.entrada_inventario"))
 
-    # 🧾 Mostrar formulario de creación
     return render_template("nuevo_producto.html")
 
 
