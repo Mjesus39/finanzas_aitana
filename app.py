@@ -29,7 +29,7 @@ app.jinja_env.globals.update(hora_chile=hora_chile)
 # ======================================================
 
 # 🔗 Cadena directa de conexión Neon (una sola línea, tal como la entrega Neon)
-DATABASE_URL = "postgresql+psycopg2://neondb_owner:npg_W6kO3HxNzudU@ep-round-shape-a462zq46-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+DATABASE_URL = "postgresql+psycopg2://neondb_owner:npg_XjtibPS1as6R@ep-gentle-art-ahdppyoo-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 # 🔁 Compatibilidad Render (por si en el futuro usas su variable de entorno)
 env_url = os.getenv("DATABASE_URL")

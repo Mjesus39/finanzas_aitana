@@ -652,17 +652,23 @@ def entrada_inventario():
 
 
 # ======================================================
-# 📊 LIQUIDACIÓN (ajustada a hora local de Chile 🇨🇱)
+# 📊 LIQUIDACIÓN (consulta, día actual por defecto) — hora Chile 🇨🇱
 # ======================================================
 @app_rutas.route("/liquidacion", methods=["GET", "POST"])
 @login_required
 def liquidacion():
-    hoy = local_date()
+    hoy = local_date()  # ✅ fecha local Chile
     fecha_inicio = request.form.get("fecha_inicio")
     fecha_fin = request.form.get("fecha_fin")
 
+    # =============================
+    # ✅ Última liquidación registrada (para mostrar en la vista)
+    # =============================
+    ultima_liq = Liquidacion.query.order_by(Liquidacion.fecha.desc()).first()
+    ultima_fecha = ultima_liq.fecha if ultima_liq else None
+
     # =====================================================
-    # 📆 CONSULTA POR RANGO
+    # 📆 CONSULTA POR RANGO (POST)
     # =====================================================
     if request.method == "POST" and fecha_inicio and fecha_fin:
         try:
@@ -677,39 +683,49 @@ def liquidacion():
             return redirect(url_for("app_rutas.liquidacion"))
 
         resultados = []
-        total_ingresos = total_ventas = total_salida = 0.0
+        total_ingresos = 0.0
+        total_ventas = 0.0
+        total_salida = 0.0
         caja_final = 0.0
         inventario_total = calcular_inventario_total()
 
         fecha_actual = fi
-        caja_anterior = 0.0
+        caja_inicial = None  # para el tfoot de la tabla
 
         while fecha_actual <= ff:
             start, end = day_range(fecha_actual)
-            liq = Liquidacion.query.filter_by(fecha=fecha_actual).first()
 
-            if liq and liq.caja is not None:
-                caja_anterior = liq.caja
-            elif resultados:
-                caja_anterior = resultados[-1]["caja"]
+            # Caja del día anterior (según tu helper)
+            caja_anterior = obtener_caja_anterior(fecha_actual)
 
-            ventas_dia = db.session.query(func.coalesce(func.sum(Venta.ingreso), 0)) \
-                .filter(Venta.fecha >= start, Venta.fecha < end).scalar() or 0.0
+            # Ventas del día
+            ventas_dia = (
+                db.session.query(func.coalesce(func.sum(Venta.ingreso), 0))
+                .filter(Venta.fecha >= start, Venta.fecha < end)
+                .scalar() or 0.0
+            )
 
-            entradas_dia = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
-                .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end,
-                        MovimientoCaja.tipo == "entrada").scalar() or 0.0
+            # Entradas del día
+            entradas_dia = (
+                db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
+                .filter(MovimientoCaja.tipo == "entrada")
+                .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end)
+                .scalar() or 0.0
+            )
 
-            salidas_dia = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
-                .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end,
-                        MovimientoCaja.tipo.in_(["salida", "gasto"])).scalar() or 0.0
+            # Salidas + gastos del día
+            salidas_dia = (
+                db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
+                .filter(MovimientoCaja.tipo.in_(["salida", "gasto"]))
+                .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end)
+                .scalar() or 0.0
+            )
 
-            # 💰 CORRECCIÓN: no restamos doble las salidas
+            # 💡 Mantengo tu criterio previo: caja mostrada SIN restar salidas para evitar doble descuento
             caja_actual = caja_anterior + ventas_dia + entradas_dia
 
             resultados.append({
                 "fecha": fecha_actual,
-                "ingresos": entradas_dia,
                 "caja_anterior": caja_anterior,
                 "ventas_dia": ventas_dia,
                 "salida_efectivo": salidas_dia,
@@ -717,10 +733,14 @@ def liquidacion():
                 "suma_paquete": inventario_total,
             })
 
+            if caja_inicial is None:
+                caja_inicial = caja_anterior
+
             total_ingresos += entradas_dia
             total_ventas += ventas_dia
             total_salida += salidas_dia
             caja_final = caja_actual
+
             fecha_actual += timedelta(days=1)
 
         return render_template(
@@ -729,12 +749,70 @@ def liquidacion():
             liquidaciones=resultados,
             fecha_inicio=fi,
             fecha_fin=ff,
+            ultima_fecha=ultima_fecha,
+            caja_inicial=caja_inicial or 0.0,
             total_ingresos=total_ingresos,
             total_ventas=total_ventas,
             total_salida=total_salida,
             caja_final=caja_final,
             total_paquete=inventario_total
         )
+
+    # =====================================================
+    # ✅ GET (por defecto: SOLO día actual)
+    # =====================================================
+    start, end = day_range(hoy)
+
+    inventario_total = calcular_inventario_total()
+    caja_anterior = obtener_caja_anterior(hoy)
+
+    ventas_dia = (
+        db.session.query(func.coalesce(func.sum(Venta.ingreso), 0))
+        .filter(Venta.fecha >= start, Venta.fecha < end)
+        .scalar() or 0.0
+    )
+
+    entradas_dia = (
+        db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
+        .filter(MovimientoCaja.tipo == "entrada")
+        .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end)
+        .scalar() or 0.0
+    )
+
+    salidas_dia = (
+        db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
+        .filter(MovimientoCaja.tipo.in_(["salida", "gasto"]))
+        .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end)
+        .scalar() or 0.0
+    )
+
+    # 💡 Igual que en el rango: no restamos salidas aquí para no duplicar descuento
+    caja_actual = caja_anterior + ventas_dia + entradas_dia
+
+    resultados = [{
+        "fecha": hoy,
+        "caja_anterior": caja_anterior,
+        "ventas_dia": ventas_dia,
+        "salida_efectivo": salidas_dia,
+        "caja": caja_actual,
+        "suma_paquete": inventario_total,
+    }]
+
+    return render_template(
+        "liquidacion.html",
+        modo="dia",
+        liquidaciones=resultados,
+        fecha_inicio=hoy,
+        fecha_fin=hoy,
+        ultima_fecha=ultima_fecha,
+        caja_inicial=caja_anterior,
+        total_ingresos=entradas_dia,
+        total_ventas=ventas_dia,
+        total_salida=salidas_dia,
+        caja_final=caja_actual,
+        total_paquete=inventario_total
+    )
+
 
 # =====================================================
 # 📅 ÚLTIMA LIQUIDACIÓN (por defecto) — versión protegida
