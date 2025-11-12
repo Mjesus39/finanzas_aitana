@@ -64,15 +64,21 @@ class Liquidacion(db.Model):
 
 
 # ======================================================
-# 🧮 LIQUIDACIÓN DE PRODUCTOS
+# 🧮 LIQUIDACIÓN DE PRODUCTOS — versión mejorada
 # ======================================================
 class LiquidacionProducto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     fecha = db.Column(db.Date, unique=True, nullable=False)
-    caja_anterior = db.Column(db.Float, default=0.0)
-    entrada_inventario = db.Column(db.Float, default=0.0)
-    salida_efectivo = db.Column(db.Float, default=0.0)
-    caja_actual = db.Column(db.Float, default=0.0)
+
+    # 💰 Caja y movimientos
+    caja_anterior = db.Column(db.Float, default=0.0)           # Caja del día anterior
+    ventas_dia = db.Column(db.Float, default=0.0)               # Total de ventas del día
+    entradas = db.Column(db.Float, default=0.0)                 # Entradas de efectivo manuales
+    salidas = db.Column(db.Float, default=0.0)                  # Salidas de efectivo (gastos, etc.)
+    caja_dia = db.Column(db.Float, default=0.0)                 # Caja actual del día
+    caja_total = db.Column(db.Float, default=0.0)               # Caja total acumulada (histórica)
+    
+    # 📦 Inventario
     inventario_total = db.Column(db.Float, default=0.0)
 
 
