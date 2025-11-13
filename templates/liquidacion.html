@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 {% block title %}📊 Liquidación de Productos{% endblock %}
 
@@ -12,8 +11,8 @@
     <form action="{{ url_for('app_rutas.caja_salida') }}" method="POST"
           class="d-flex flex-wrap align-items-center gap-2 shadow-sm p-3 bg-light rounded">
       <h5 class="mb-0 text-danger fw-bold">💸 Salida de Efectivo</h5>
-      <input type="number" name="monto" step="0.01" min="0" placeholder="Valor"
-             class="form-control" required style="width:120px;">
+      <input type="number" name="monto" step="0.01" min="0"
+             placeholder="Valor" class="form-control" required style="width:120px;">
       <input type="text" name="descripcion" placeholder="Motivo"
              class="form-control" required style="width:200px;">
       <button type="submit" class="btn btn-danger fw-bold">Aplicar</button>
@@ -31,12 +30,10 @@
 
     <!-- 📅 Selector de fechas -->
     <form method="POST" class="d-flex flex-wrap justify-content-center align-items-center gap-2">
-      <label for="fecha_inicio" class="fw-bold">Desde:</label>
-      <input type="date" name="fecha_inicio" value="{{ fecha_inicio }}"
-             class="form-control w-auto" required>
-      <label for="fecha_fin" class="fw-bold">Hasta:</label>
-      <input type="date" name="fecha_fin" value="{{ fecha_fin }}"
-             class="form-control w-auto" required>
+      <label class="fw-bold">Desde:</label>
+      <input type="date" name="fecha_inicio" value="{{ fecha_inicio }}" class="form-control w-auto" required>
+      <label class="fw-bold">Hasta:</label>
+      <input type="date" name="fecha_fin" value="{{ fecha_fin }}" class="form-control w-auto" required>
       <button type="submit" class="btn btn-primary fw-bold">🔍 Buscar</button>
     </form>
   </div>
@@ -52,12 +49,14 @@
     {{ ultima_fecha|hora_chile if ultima_fecha else "N/A" }}
   </p>
 
+
   {% if liquidaciones %}
   <!-- ====================================================== -->
-  <!-- 💰 RESUMEN RÁPIDO (tipo dashboard) -->
+  <!-- 💰 RESUMEN RÁPIDO -->
   <!-- ====================================================== -->
   {% set liq = liquidaciones[0] %}
   <div class="row text-center mb-4">
+
     <div class="col-md-4 mb-2">
       <div class="card shadow-sm border-success">
         <div class="card-body">
@@ -66,6 +65,7 @@
         </div>
       </div>
     </div>
+
     <div class="col-md-4 mb-2">
       <div class="card shadow-sm border-primary">
         <div class="card-body">
@@ -74,6 +74,7 @@
         </div>
       </div>
     </div>
+
     <div class="col-md-4 mb-2">
       <div class="card shadow-sm border-warning">
         <div class="card-body">
@@ -82,6 +83,7 @@
         </div>
       </div>
     </div>
+
   </div>
 
   <!-- ====================================================== -->
@@ -94,17 +96,19 @@
           <th>Fecha</th>
           <th>Caja anterior</th>
           <th>Ventas del día</th>
-          <th>Entradas</th>
           <th>Salidas</th>
           <th>Caja del día</th>
           <th>Caja total acumulada</th>
           <th>Inventario</th>
         </tr>
       </thead>
+
       <tbody>
         {% for d in liquidaciones %}
         <tr>
+
           <td>{{ d.fecha|hora_chile }}</td>
+
           <td>${{ "%.2f"|format(d.caja_anterior or 0) }}</td>
 
           <!-- 💰 Ventas del día (clickeable) -->
@@ -112,14 +116,6 @@
             <a href="{{ url_for('app_rutas.detalle_ventas', fecha=d.fecha.strftime('%Y-%m-%d')) }}"
                class="fw-bold text-success text-decoration-none">
               ${{ "%.2f"|format(d.ventas_dia or 0) }}
-            </a>
-          </td>
-
-          <!-- 💵 Entradas (clickeable) -->
-          <td>
-            <a href="{{ url_for('app_rutas.detalle_ventas', fecha=d.fecha.strftime('%Y-%m-%d')) }}"
-               class="fw-bold text-info text-decoration-none">
-              ${{ "%.2f"|format(d.entradas or 0) }}
             </a>
           </td>
 
@@ -134,27 +130,34 @@
           <td class="fw-bold text-primary">
             ${{ "%.2f"|format(d.caja_dia or 0) }}
           </td>
+
           <td class="fw-bold text-success">
             ${{ "%.2f"|format(d.caja_total or 0) }}
           </td>
-          <td>${{ "%.2f"|format(d.inventario or 0) }}</td>
+
+          <td>
+            ${{ "%.2f"|format(d.inventario or 0) }}
+          </td>
+
         </tr>
         {% endfor %}
       </tbody>
 
-      <!-- ✅ Pie de totales perfectamente alineado -->
+      <!-- ====================================================== -->
+      <!-- 🧮 PIE DE TOTALES -->
+      <!-- ====================================================== -->
       <tfoot class="table-light fw-bold">
         <tr>
           <td>Total</td>
           <td>${{ "%.2f"|format(caja_inicial or 0) }}</td>
           <td>${{ "%.2f"|format(total_ventas or 0) }}</td>
-          <td>${{ "%.2f"|format(total_ingresos or 0) }}</td>
           <td>${{ "%.2f"|format(total_salida or 0) }}</td>
           <td>${{ "%.2f"|format(caja_final or 0) }}</td>
           <td>${{ "%.2f"|format(caja_final or 0) }}</td>
           <td>${{ "%.2f"|format(total_paquete or 0) }}</td>
         </tr>
       </tfoot>
+
     </table>
   </div>
 
@@ -163,5 +166,6 @@
     📭 No se encontraron registros de liquidación.
   </div>
   {% endif %}
+
 </div>
 {% endblock %}

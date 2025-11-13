@@ -693,7 +693,7 @@ def liquidacion():
     fecha_inicio = request.form.get("fecha_inicio")
     fecha_fin = request.form.get("fecha_fin")
 
-    # ✅ Última liquidación registrada
+    # Última liquidación registrada
     ultima_liq = LiquidacionProducto.query.order_by(LiquidacionProducto.fecha.desc()).first()
     ultima_fecha = ultima_liq.fecha if ultima_liq else None
 
@@ -716,9 +716,35 @@ def liquidacion():
         total_ventas = total_entradas = total_salidas = total_caja = 0.0
 
         fecha_actual = fi
+
         while fecha_actual <= ff:
             start, end = day_range(fecha_actual)
             inventario_total = calcular_inventario_total()
+
+            # 🛑 1. SI YA EXISTE LIQUIDACIÓN GUARDADA → USARLA Y NO RECALCULAR
+            liq_guardada = LiquidacionProducto.query.filter_by(fecha=fecha_actual).first()
+            if liq_guardada:
+                resultados.append({
+                    "fecha": liq_guardada.fecha,
+                    "caja_anterior": liq_guardada.caja_anterior,
+                    "ventas_dia": liq_guardada.ventas_dia,
+                    "entradas": liq_guardada.entradas,
+                    "salidas": liq_guardada.salidas,
+                    "caja_dia": liq_guardada.caja_dia,
+                    "caja_total": liq_guardada.caja_total,
+                    "inventario": liq_guardada.inventario_total,
+                })
+
+                # Sumar totales
+                total_ventas += liq_guardada.ventas_dia
+                total_entradas += liq_guardada.entradas
+                total_salidas += liq_guardada.salidas
+                total_caja = liq_guardada.caja_dia
+
+                fecha_actual += timedelta(days=1)
+                continue
+
+            # 🟢 2. SI NO EXISTE LIQUIDACIÓN → CALCULAR NORMAL
             caja_anterior = obtener_caja_anterior(fecha_actual)
 
             ventas_dia = (
@@ -748,14 +774,16 @@ def liquidacion():
                 "entradas": entradas,
                 "salidas": salidas,
                 "caja_dia": caja_dia,
-                "caja_total": caja_dia,  # ❗ solo mostramos acumulado real por rango
+                "caja_total": caja_dia,
                 "inventario": inventario_total,
             })
 
+            # Acumular totales generales
             total_ventas += ventas_dia
             total_entradas += entradas
             total_salidas += salidas
             total_caja = caja_dia
+
             fecha_actual += timedelta(days=1)
 
         return render_template(
@@ -773,43 +801,48 @@ def liquidacion():
         )
 
     # =====================================================
-    # ✅ GET — LIQUIDACIÓN DEL DÍA
+    # ✅ GET — LIQUIDACIÓN DEL DÍA (SIN DUPLICAR)
     # =====================================================
     start, end = day_range(hoy)
     inventario_total = calcular_inventario_total()
-    caja_anterior = obtener_caja_anterior(hoy)
 
-    ventas_dia = (
-        db.session.query(func.coalesce(func.sum(Venta.ingreso), 0))
-        .filter(Venta.fecha >= start, Venta.fecha < end)
-        .scalar() or 0.0
-    )
-    entradas = (
-        db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
-        .filter(MovimientoCaja.tipo == "entrada",
-                MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end)
-        .scalar() or 0.0
-    )
-    salidas = (
-        db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
-        .filter(MovimientoCaja.tipo.in_(["salida", "gasto"]),
-                MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end)
-        .scalar() or 0.0
-    )
-
-    caja_dia = caja_anterior + ventas_dia + entradas - salidas
-
-    # 🔒 Verificar si ya existe la liquidación del día
+    # 1️⃣ SI YA EXISTE LIQUIDACIÓN DEL DÍA → SOLO MOSTRARLA
     liq_existente = LiquidacionProducto.query.filter_by(fecha=hoy).first()
     if liq_existente:
-        liq_existente.caja_anterior = caja_anterior
-        liq_existente.ventas_dia = ventas_dia
-        liq_existente.entradas = entradas
-        liq_existente.salidas = salidas
-        liq_existente.caja_dia = caja_dia
-        liq_existente.caja_total = caja_dia  # ❗ evitar acumulación infinita
-        liq_existente.inventario_total = inventario_total
+        resultados = [{
+            "fecha": liq_existente.fecha,
+            "caja_anterior": liq_existente.caja_anterior,
+            "ventas_dia": liq_existente.ventas_dia,
+            "entradas": liq_existente.entradas,
+            "salidas": liq_existente.salidas,
+            "caja_dia": liq_existente.caja_dia,
+            "caja_total": liq_existente.caja_total,
+            "inventario": liq_existente.inventario_total,
+        }]
     else:
+        # 2️⃣ SI NO EXISTE, CALCULAR Y GUARDAR UNA SOLA VEZ
+        caja_anterior = obtener_caja_anterior(hoy)
+
+        ventas_dia = (
+            db.session.query(func.coalesce(func.sum(Venta.ingreso), 0))
+            .filter(Venta.fecha >= start, Venta.fecha < end)
+            .scalar() or 0.0
+        )
+        entradas = (
+            db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
+            .filter(MovimientoCaja.tipo == "entrada",
+                    MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end)
+            .scalar() or 0.0
+        )
+        salidas = (
+            db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
+            .filter(MovimientoCaja.tipo.in_(["salida", "gasto"]),
+                    MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end)
+            .scalar() or 0.0
+        )
+
+        caja_dia = caja_anterior + ventas_dia + entradas - salidas
+
         nueva_liq = LiquidacionProducto(
             fecha=hoy,
             caja_anterior=caja_anterior,
@@ -821,19 +854,18 @@ def liquidacion():
             inventario_total=inventario_total,
         )
         db.session.add(nueva_liq)
+        db.session.commit()
 
-    db.session.commit()
-
-    resultados = [{
-        "fecha": hoy,
-        "caja_anterior": caja_anterior,
-        "ventas_dia": ventas_dia,
-        "entradas": entradas,
-        "salidas": salidas,
-        "caja_dia": caja_dia,
-        "caja_total": caja_dia,
-        "inventario": inventario_total,
-    }]
+        resultados = [{
+            "fecha": hoy,
+            "caja_anterior": caja_anterior,
+            "ventas_dia": ventas_dia,
+            "entradas": entradas,
+            "salidas": salidas,
+            "caja_dia": caja_dia,
+            "caja_total": caja_dia,
+            "inventario": inventario_total,
+        }]
 
     return render_template(
         "liquidacion.html",
@@ -842,10 +874,10 @@ def liquidacion():
         fecha_inicio=hoy,
         fecha_fin=hoy,
         ultima_fecha=ultima_fecha,
-        total_ventas=ventas_dia,
-        total_ingresos=entradas,
-        total_salida=salidas,
-        caja_final=caja_dia,
+        total_ventas=resultados[0]["ventas_dia"],
+        total_ingresos=resultados[0]["entradas"],
+        total_salida=resultados[0]["salidas"],
+        caja_final=resultados[0]["caja_dia"],
         total_paquete=inventario_total
     )
 
