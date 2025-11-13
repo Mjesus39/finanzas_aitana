@@ -1,8 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>{% block title %}Aitana System{% endblock %}</title>
 
   <!-- Bootstrap -->
@@ -31,34 +33,20 @@
       font-size: 0.9rem;
     }
 
-    .container { max-width: 1100px; }
+    .container {
+      max-width: 1100px;
+    }
 
     .nav-link.active {
       font-weight: bold;
       color: #0d6efd !important;
     }
-
-    /* Overlay carga */
-    #loadingOverlay {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(255, 255, 255, 0.85);
-      z-index: 2000;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.3s ease, visibility 0.3s ease;
-      pointer-events: none;
-    }
   </style>
 </head>
+
 <body>
 
-
-  <!-- 🧭 NAVBAR — ahora SOLO aparece si hay usuario logueado -->
+  <!-- 🧭 NAVBAR -->
   {% if session.get('usuario') %}
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
@@ -70,23 +58,23 @@
 
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto">
-          
+
           <li class="nav-item">
-            <a href="{{ url_for('app_rutas.entrada_inventario') }}" 
+            <a href="{{ url_for('app_rutas.entrada_inventario') }}"
                class="nav-link {% if request.endpoint == 'app_rutas.entrada_inventario' %}active{% endif %}">
                📦 Inventario
             </a>
           </li>
 
           <li class="nav-item">
-            <a href="{{ url_for('app_rutas.liquidacion') }}" 
+            <a href="{{ url_for('app_rutas.liquidacion') }}"
                class="nav-link {% if request.endpoint == 'app_rutas.liquidacion' %}active{% endif %}">
                📊 Liquidación
             </a>
           </li>
 
           <li class="nav-item">
-            <a href="{{ url_for('app_rutas.dashboard') }}" 
+            <a href="{{ url_for('app_rutas.dashboard') }}"
                class="nav-link {% if request.endpoint == 'app_rutas.dashboard' %}active{% endif %}">
                📈 Dashboard
             </a>
@@ -106,28 +94,24 @@
     </div>
   </nav>
   {% endif %}
-  <!-- FIN NAVBAR -->
 
-
-  <!-- 📦 CONTENIDO PRINCIPAL -->
+  <!-- 📦 CONTENIDO -->
   <main class="flex-grow-1">
-
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <div class="container mt-3">
-          {% for category, message in messages %}
-            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-              {{ message }}
-              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-          {% endfor %}
+      <div class="container mt-3">
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
+        {% endfor %}
+      </div>
       {% endif %}
     {% endwith %}
 
     {% block content %}{% endblock %}
   </main>
-
 
   <!-- ⚙️ FOOTER -->
   <footer>
@@ -136,57 +120,50 @@
     </div>
   </footer>
 
-
-  <!-- ⏳ Spinner pequeño -->
-  <div id="miniLoading" style="position:fixed; top:10px; right:10px; z-index:3000; display:none;">
+  <!-- 🔄 MINI SPINNER (relojito) -->
+  <div id="miniLoading" style="
+      position:fixed;
+      top:10px;
+      right:10px;
+      z-index:3000;
+      display:none;">
     <div class="spinner-border text-warning" style="width:2rem;height:2rem;" role="status"></div>
   </div>
 
-
-  <!-- ⚙️ Script del overlay -->
+  <!-- SCRIPT del mini spinner -->
   <script>
-  document.addEventListener("DOMContentLoaded", () => {
-    const overlay = document.getElementById("loadingOverlay");
-    let visible = false;
-
-    function mostrar() {
-      if (visible) return;
-      visible = true;
-      overlay.style.pointerEvents = "auto";
-      overlay.style.visibility = "visible";
-      overlay.style.opacity = "1";
+    function mostrarMini() {
+      document.getElementById("miniLoading").style.display = "block";
     }
 
-    function ocultar() {
-      visible = false;
-      overlay.style.opacity = "0";
-      overlay.style.visibility = "hidden";
-      overlay.style.pointerEvents = "none";
+    function ocultarMini() {
+      document.getElementById("miniLoading").style.display = "none";
     }
 
-    document.querySelectorAll("form").forEach(form => {
-      form.addEventListener("submit", () => {
-        mostrar();
-        setTimeout(ocultar, 10000);
+    document.addEventListener("DOMContentLoaded", () => {
+
+      // Cuando envías formularios
+      document.querySelectorAll("form").forEach(form => {
+        form.addEventListener("submit", () => {
+          mostrarMini();
+          setTimeout(ocultarMini, 8000);
+        });
+      });
+
+      // Cuando haces click en enlaces internos
+      document.querySelectorAll("a[href]").forEach(a => {
+        const href = a.getAttribute("href");
+
+        if (!href || href.startsWith("#") || href.startsWith("javascript:") || a.target === "_blank") {
+          return;
+        }
+
+        a.addEventListener("click", () => {
+          mostrarMini();
+          setTimeout(ocultarMini, 8000);
+        });
       });
     });
-
-    document.querySelectorAll("a[href]").forEach(link => {
-      const href = link.getAttribute("href");
-      if (!href || href.startsWith("#") || href.startsWith("javascript:") || link.target === "_blank") return;
-
-      link.addEventListener("click", () => {
-        mostrar();
-        setTimeout(ocultar, 10000);
-      });
-    });
-
-    window.mostrarProcesando = mostrar;
-    window.ocultarProcesando = ocultar;
-
-    window.addEventListener("load", ocultar);
-    ocultar();
-  });
   </script>
 
   {% block scripts %}{% endblock %}
