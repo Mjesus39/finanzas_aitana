@@ -2,23 +2,32 @@
 {% block title %}📦 Inventario{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-  <h2 class="text-center mb-4">📦 Inventario de Productos</h2>
+<div class="container mt-4 inventario-contenedor">
+  <h2 class="text-center mb-4 titulo-inventario">📦 Inventario de Productos</h2>
 
   <!-- 🔹 Barra superior -->
-  <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-3 gap-2">
-    <div class="d-flex flex-wrap gap-2">
-      <a class="btn btn-primary" href="{{ url_for('app_rutas.nuevo_producto') }}">➕ Nuevo Producto</a>
-      <a class="btn btn-secondary" href="{{ url_for('app_rutas.liquidacion') }}">📊 Ver Liquidación</a>
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-3 gap-2 barra-superior">
+    <div class="d-flex flex-wrap gap-2 acciones">
+      <a class="btn btn-primary fw-semibold" href="{{ url_for('app_rutas.nuevo_producto') }}">
+        ➕ Nuevo Producto
+      </a>
+      <a class="btn btn-secondary fw-semibold" href="{{ url_for('app_rutas.liquidacion') }}">
+        📊 Ver Liquidación
+      </a>
     </div>
   </div>
 
   <!-- 🔍 Buscar -->
-  <input type="text" id="buscar-producto" class="form-control mb-3" placeholder="🔍 Buscar producto por código o nombre...">
+  <input 
+    type="text" 
+    id="buscar-producto" 
+    class="form-control mb-3 buscador shadow-sm"
+    placeholder="🔍 Buscar producto por código o nombre..."
+  >
 
   {% if productos %}
   <div class="table-responsive">
-    <table id="tabla-productos" class="table table-bordered table-hover align-middle text-center shadow-sm">
+    <table id="tabla-productos" class="table table-bordered table-hover align-middle text-center shadow-sm tabla-elegante">
       <thead class="table-dark">
         <tr>
           <th>Orden</th>
@@ -36,122 +45,130 @@
         {% set precio_ganancia = (p.valor_unitario or 0) * (1 + (p.interes or 0)/100) %}
         <tr id="producto-{{ p.id }}" class="{{ estado_class(p) }}">
           <td>{{ p.orden }}</td>
-          <td class="col-codigo">{{ p.codigo }}</td>
+
+          <td class="col-codigo fw-semibold">{{ p.codigo }}</td>
+
           <td class="fw-bold col-nombre">{{ p.nombre }}</td>
-          <td class="precio-ganancia">{{ "%.2f"|format(precio_ganancia) }}</td>
-          <td class="stock-actual">{{ p.unidades_restantes or 0 }}</td>
+
+          <td class="precio-ganancia text-primary fw-semibold">
+            {{ "%.2f"|format(precio_ganancia) }}
+          </td>
+
+          <td class="stock-actual fw-bold">{{ p.unidades_restantes or 0 }}</td>
+
           <td>
-            <form class="form-vender d-flex justify-content-center" 
-                  data-id="{{ p.id }}" 
-                  data-action="{{ url_for('app_rutas.vender', producto_id=p.id) }}">
-              <input type="number" step="1" min="1" max="{{ p.unidades_restantes }}" name="cantidad"
-                     placeholder="0" class="form-control text-end cantidad-input fw-bold fs-5"
-                     style="width:100px; height:46px;" required>
-              <button type="submit" class="btn btn-success ms-2 fs-5 btn-vender">💵</button>
+            <form 
+              class="form-vender d-flex justify-content-center" 
+              data-id="{{ p.id }}" 
+              data-action="{{ url_for('app_rutas.vender', producto_id=p.id) }}"
+            >
+              <input 
+                type="number" 
+                step="1" 
+                min="1" 
+                max="{{ p.unidades_restantes }}" 
+                name="cantidad"
+                placeholder="0" 
+                class="form-control text-end cantidad-input fw-bold fs-5 input-vender"
+                style="width:100px; height:46px;" 
+                required
+              >
+              <button 
+                type="submit" 
+                class="btn btn-success ms-2 fs-5 btn-vender"
+              >
+                💵
+              </button>
             </form>
           </td>
+
           <!-- 🔵 Celda clickeable para abrir el modal de detalles del día -->
           <td class="vendidas-dia">
-            <button type="button"
-                    class="btn btn-link fw-bold text-decoration-none p-0 ver-detalles-venta"
-                    data-producto-id="{{ p.id }}"
-                    data-producto-nombre="{{ p.nombre }}"
-                    data-producto-codigo="{{ p.codigo }}">
+            <button 
+              type="button"
+              class="btn btn-link fw-bold text-decoration-none p-0 boton-detalle"
+              data-producto-id="{{ p.id }}"
+              data-producto-nombre="{{ p.nombre }}"
+              data-producto-codigo="{{ p.codigo }}"
+            >
               {{ p.vendidas_dia or 0 }}
             </button>
           </td>
-          <td class="valor-vendido-dia">{{ "%.2f"|format(p.valor_vendido_dia or 0) }}</td>
+
+          <td class="valor-vendido-dia fw-semibold text-success">
+            {{ "%.2f"|format(p.valor_vendido_dia or 0) }}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
-      <tfoot class="table-light">
+
+      <tfoot class="table-secondary fw-bold">
         <tr>
           <th colspan="7" class="text-end">💰 Total Vendido Hoy:</th>
-          <th id="total-vendido-hoy">{{ "%.2f"|format(total_vendido or 0) }}</th>
+          <th id="total-vendido-hoy" class="text-success">
+            {{ "%.2f"|format(total_vendido or 0) }}
+          </th>
         </tr>
       </tfoot>
     </table>
   </div>
   {% else %}
-  <div class="alert alert-info text-center mt-4">No hay productos registrados todavía.</div>
+  <div class="alert alert-info text-center mt-4 shadow-sm">
+    No hay productos registrados todavía.
+  </div>
   {% endif %}
 </div>
 
-<!-- ✅ Toasts -->
-<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
-  <div id="toast-success" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
-    <div class="d-flex">
-      <div class="toast-body" id="toast-success-text">Venta registrada.</div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-    </div>
-  </div>
-  <div id="toast-error" class="toast align-items-center text-bg-danger border-0 mt-2" role="alert" aria-live="assertive" aria-atomic="true">
-    <div class="d-flex">
-      <div class="toast-body" id="toast-error-text">Error al registrar la venta.</div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-    </div>
-  </div>
-</div>
+<!-- ===================== -->
+<!-- 🎨 ESTILOS COMPLETOS -->
+<!-- ===================== -->
+<style>
 
-<!-- 🎵 Sonido -->
-<audio id="sonido-ok" preload="auto">
-  <source src="https://assets.mixkit.co/sfx/download/mixkit-correct-answer-tone-2870.wav" type="audio/wav">
-</audio>
+.inventario-contenedor {
+  animation: fadeIn 0.4s ease;
+}
 
-<!-- 🪟 Modal elegante: Detalle de ventas del día del producto -->
-<div class="modal fade" id="modalDetallesVentas" tabindex="-1" aria-labelledby="modalDetallesVentasLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content shadow-lg border-0">
-      <div class="modal-header bg-dark text-white">
-        <h5 class="modal-title" id="modalDetallesVentasLabel">📈 Ventas del día</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <div class="modal-body bg-light">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <div>
-            <div class="fw-bold">Código: <span id="md-codigo" class="text-primary"></span></div>
-            <div class="fw-bold">Producto: <span id="md-nombre" class="text-dark"></span></div>
-          </div>
-          <div class="text-end">
-            <div class="small text-muted">Fecha (hora Chile)</div>
-            <div class="small fw-semibold" id="md-fecha-hoy"></div>
-          </div>
-        </div>
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
-        <div id="md-contenido">
-          <div class="table-responsive">
-            <table class="table table-striped table-hover align-middle text-center shadow-sm">
-              <thead class="table-dark">
-                <tr>
-                  <th>🕒 Hora</th>
-                  <th>🔢 Cantidad</th>
-                  <th>💰 Ingreso</th>
-                  <th⚙️ Acción</th>
-                </tr>
-              </thead>
-              <tbody id="md-tbody">
-                <!-- filas dinámicas -->
-              </tbody>
-              <tfoot class="table-secondary fw-bold">
-                <tr>
-                  <td class="text-end" colspan="2">Total</td>
-                  <td id="md-total"></td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <div id="md-vacio" class="alert alert-info text-center d-none">
-            📭 No hay ventas registradas hoy para este producto.
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer bg-light">
-        <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Cerrar</button>
-      </div>
-    </div>
-  </div>
-</div>
+.titulo-inventario {
+  font-weight: 900;
+  color: #212529;
+}
+
+.buscador {
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 1.1rem;
+}
+
+.tabla-elegante {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.tabla-elegante tbody tr:hover {
+  background-color: #eef3ff !important;
+}
+
+.input-vender {
+  border-radius: 10px;
+  font-size: 1.2rem;
+}
+
+.boton-detalle {
+  font-size: 1.1rem;
+  color: #0d6efd;
+}
+
+.boton-detalle:hover {
+  text-decoration: underline;
+}
+
+</style>
+
 {% endblock %}
 
 {% block scripts %}
@@ -208,7 +225,7 @@
 
         const data = await res.json();
         if (data.success) {
-          // ✅ Actualizar interfaz
+          // Actualizar interfaz
           stockEl.textContent = data.stock;
           vendidasEl.querySelector("button").textContent = data.vendidas_dia;
           valorEl.textContent = data.valor_vendido_dia.toFixed(2);
@@ -234,7 +251,7 @@
     });
   });
 
-  // 🪟 Abrir modal de detalles
+  // 🪟 Modal de detalles
   const modalEl = $("#modalDetallesVentas");
   const modal = new bootstrap.Modal(modalEl);
 
@@ -242,6 +259,7 @@
     $("#md-codigo").textContent = codigo;
     $("#md-nombre").textContent = nombre;
     $("#md-fecha-hoy").textContent = "";
+
     const tbody = $("#md-tbody");
     tbody.innerHTML = "";
     $("#md-total").textContent = "0.00";
@@ -255,8 +273,9 @@
       const ventas = data.ventas || [];
       let total = 0;
 
-      if (ventas.length === 0) $("#md-vacio").classList.remove("d-none");
-      else {
+      if (ventas.length === 0) {
+        $("#md-vacio").classList.remove("d-none");
+      } else {
         ventas.forEach(v => {
           total += v.ingreso;
           const tr = document.createElement("tr");
@@ -282,7 +301,7 @@
     }
   }
 
-  $$(".ver-detalles-venta").forEach(btn => {
+  $$(".ver-detalles-venta, .boton-detalle").forEach(btn => {
     btn.addEventListener("click", () => {
       const productoId = btn.dataset.productoId;
       const codigo = btn.dataset.productoCodigo;
@@ -291,13 +310,13 @@
     });
   });
 
-  // 🗑 Eliminar venta desde el modal
+  // 🗑 Eliminar venta desde modal
   $("#md-tbody")?.addEventListener("click", async (e) => {
     const btn = e.target.closest(".eliminar-venta");
     if (!btn) return;
+
     const ventaId = btn.dataset.ventaId;
     const productoId = btn.dataset.productoId;
-    if (!ventaId) return;
 
     btn.disabled = true;
     try {
@@ -315,6 +334,7 @@
         const val = parseFloat(tr.children[2].textContent.replace("$","")) || 0;
         total += val;
       });
+
       $("#md-total").textContent = `$${total.toFixed(2)}`;
       if ($$("#md-tbody tr").length === 0) $("#md-vacio").classList.remove("d-none");
 
@@ -340,7 +360,6 @@
 })();
 </script>
 
-<!-- ✨ Scroll automático y resaltado del nuevo producto -->
 <script>
 document.addEventListener("DOMContentLoaded", function() {
   const anchor = window.location.hash;

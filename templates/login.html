@@ -2,57 +2,162 @@
 {% block title %}🔐 Iniciar sesión{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-center align-items-center vh-100 bg-light">
-  <div class="card shadow-lg p-4 border-0" style="width: 360px; border-radius: 15px;">
-    <h3 class="text-center mb-3 fw-bold text-dark">🔐 Iniciar sesión</h3>
 
-    <!-- Alertas -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }} alert-dismissible fade show small" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
+<!-- ========================= -->
+<!-- 🌌 FONDO SUAVE -->
+<!-- ========================= -->
+<div class="login-bg"></div>
 
-    <form method="POST">
-      <div class="mb-3">
-        <label class="form-label fw-semibold">👤 Usuario</label>
-        <input type="text" name="usuario" class="form-control shadow-sm" placeholder="Tu usuario" required autofocus>
-      </div>
+<div class="d-flex justify-content-center align-items-center vh-100">
 
-      <div class="mb-3">
-        <label class="form-label fw-semibold">🔑 Contraseña</label>
-        <input type="password" name="contrasena" class="form-control shadow-sm" placeholder="Tu contraseña" required>
-      </div>
+  <div class="circle-container">
 
-      <button type="submit" class="btn btn-dark w-100 fw-bold mt-3">Entrar</button>
-    </form>
+    <!-- Círculo exterior animado (TONOS NEUTROS) -->
+    <div class="circle-outer"></div>
 
-    <!-- ⏰ Hora actual en Chile -->
-    <p class="text-center text-muted small mt-3 mb-0">
-      🕒 {{ hora_actual()|hora_chile }}
-    </p>
+    <!-- Círculo interior para el formulario -->
+    <div class="circle-inner p-4">
 
-    <footer class="text-center mt-3 small text-muted">
-      💻 Hecho con ❤️ por <strong>Manuel Herrera</strong>
-    </footer>
+      <h3 class="text-center mb-3 fw-bold text-white">🔐 Iniciar sesión</h3>
+
+      <!-- Alertas Flask -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show small" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST">
+        <div class="mb-3">
+          <label class="form-label text-white">👤 Usuario</label>
+          <input type="text" name="usuario" class="form-control input-glass"
+                 placeholder="Tu usuario" required autofocus>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label text-white">🔑 Contraseña</label>
+          <input type="password" name="contrasena" class="form-control input-glass"
+                 placeholder="Tu contraseña" required>
+        </div>
+
+        <button type="submit" class="btn btn-login w-100 fw-bold mt-3">
+          Entrar
+        </button>
+      </form>
+
+      <p class="text-center text-light small mt-3 mb-0">
+        🕒 {{ hora_actual()|hora_chile }}
+      </p>
+
+      <footer class="text-center mt-3 small text-light">
+        💻 Hecho con ❤️ por <strong>Manuel Herrera</strong>
+      </footer>
+
+    </div>
+
   </div>
+
 </div>
 
+
+<!-- ========================= -->
+<!-- 🎨 ESTILOS CON TONOS ELEGANTES -->
+<!-- ========================= -->
 <style>
-body {
-  background: linear-gradient(to bottom right, #f5f6fa, #e9ecef);
+
+/* Fondo general */
+.login-bg {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at center, #1c1e22, #0d0e10);
+  z-index: -1;
 }
-.card {
-  transition: all 0.3s ease;
+
+/* Círculo contenedor */
+.circle-container {
+  position: relative;
+  width: 380px;
+  height: 380px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
-.card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+
+/* Círculo exterior con tonos neutros */
+.circle-outer {
+  position: absolute;
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  background: conic-gradient(
+      #2f3640,
+      #4b4e54,
+      #6c6f75,
+      #4b4e54,
+      #2f3640
+  );
+  animation: spin 10s linear infinite;
+  filter: blur(12px);
+  opacity: 0.7;
 }
+
+/* Círculo interior glass */
+.circle-inner {
+  position: relative;
+  width: 270px;
+  height: 270px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(15px);
+  animation: pulse 3s ease-in-out infinite;
+  padding-top: 35px !important;
+}
+
+/* Inputs */
+.input-glass {
+  background: rgba(255,255,255,0.15);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+.input-glass::placeholder {
+  color: rgba(255,255,255,0.6);
+}
+.input-glass:focus {
+  background: rgba(255,255,255,0.25);
+  color: white;
+}
+
+/* Botón */
+.btn-login {
+  background: white;
+  color: #1c1e22;
+  border-radius: 12px;
+  padding: 10px;
+  transition: 0.3s;
+}
+.btn-login:hover {
+  background: #e2e2e2;
+}
+
+/* Animaciones */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.98); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(0.98); }
+}
+
 </style>
+
 {% endblock %}
