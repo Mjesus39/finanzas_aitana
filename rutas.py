@@ -533,37 +533,6 @@ def detalle_ventas(fecha):
         return redirect(url_for("app_rutas.liquidacion"))
 
 # ======================================================
-# 💼 LIQUIDAR CAJA MANUALMENTE (cierre del día)
-# ======================================================
-@app_rutas.route("/liquidar_caja", methods=["POST"])
-@login_required
-def liquidar_caja():
-    from tiempo import hora_actual
-    from helpers import caja_base_del_dia
-
-    hoy = local_date()
-    caja_actual = caja_base_del_dia(hoy)
-
-    if caja_actual <= 0:
-        flash("⚠️ No hay saldo en caja para liquidar.", "warning")
-        return redirect(url_for("app_rutas.liquidacion"))
-
-    # Crear movimiento de salida por el total actual
-    movimiento = MovimientoCaja(
-        tipo="salida",
-        monto=caja_actual,
-        descripcion="Liquidación manual del día",
-        fecha=hora_actual(),
-    )
-
-    db.session.add(movimiento)
-    db.session.commit()
-
-    flash(f"✅ Caja del día liquidada correctamente (${caja_actual:,.2f}).", "success")
-    return redirect(url_for("app_rutas.liquidacion"))
-
-
-# ======================================================
 # 📤 DETALLE DE SALIDAS POR DÍA (CORREGIDO)
 # ======================================================
 @app_rutas.route("/detalle_salida/<fecha>")
